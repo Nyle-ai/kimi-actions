@@ -87,7 +87,7 @@ class BaseTool(ABC):
         return footer
 
     # Agent SDK configuration
-    AGENT_MODEL = "kimi-k2.5"  # Latest model for best performance
+    AGENT_MODEL = "kimi-k2.6"  # Latest model for best performance
     AGENT_BASE_URL = "https://api.moonshot.cn/v1"
 
     def setup_agent_env(self) -> Optional[str]:
@@ -123,7 +123,11 @@ class BaseTool(ABC):
         Returns:
             True if clone succeeded, False otherwise
         """
-        clone_url = f"https://github.com/{repo_name}.git"
+        token = os.environ.get("INPUT_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
+        if token:
+            clone_url = f"https://x-access-token:{token}@github.com/{repo_name}.git"
+        else:
+            clone_url = f"https://github.com/{repo_name}.git"
 
         try:
             if branch:

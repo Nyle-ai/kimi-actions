@@ -1,0 +1,24 @@
+src/tools/ask.py
+  s_aba0fa8f4ee736::t_5e38860f63d18a 122
+src/tools/reviewer.py
+  s_aba0fa8f4ee736::t_caf71533da89cb 148
+src/tools/base.py
+  s_aba0fa8f4ee736::t_52a0d025e79c7f 80,90,93-97,117
+  s_aba0fa8f4ee736::t_420b42153b9a52 225
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "607a47ee19d77024657b1b47e07281bb04cca6cd",
+  "prompts": {},
+  "sessions": {
+    "s_aba0fa8f4ee736": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dac4cb58-17aa-4eed-ad38-e82528b34aa0",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Artur Kuzmin <artursregs@gmail.com>"
+    }
+  }
+}

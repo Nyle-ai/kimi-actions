@@ -119,7 +119,7 @@ Be concise and helpful.
 
             async with await Session.create(
                 work_dir=work_dir_kaos,
-                model=self.AGENT_MODEL,
+                model=self.agent_model,
                 yolo=True,
                 max_steps_per_turn=100,
                 skills_dir=skills_dir_kaos,

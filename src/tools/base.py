@@ -77,7 +77,7 @@ class BaseTool(ABC):
 
     def format_footer(self, extra_info: str = "") -> str:
         """Generate standard footer for tool output."""
-        model_info = f"`{self.AGENT_MODEL}`"
+        model_info = f"`{self.agent_model}`"
 
         footer = f"---\n<sub>Powered by [Kimi](https://kimi.moonshot.cn/) | Model: {model_info}"
         if extra_info:
@@ -87,8 +87,13 @@ class BaseTool(ABC):
         return footer
 
     # Agent SDK configuration
-    AGENT_MODEL = "kimi-k2.6"  # Latest model for best performance
+    AGENT_MODEL = "kimi-k2.6"  # Default; overridden by INPUT_MODEL via ActionConfig
     AGENT_BASE_URL = "https://api.moonshot.cn/v1"
+
+    @property
+    def agent_model(self) -> str:
+        """Resolve the model name from config (workflow input) with fallback."""
+        return getattr(self.config, "model", None) or self.AGENT_MODEL
 
     def setup_agent_env(self) -> Optional[str]:
         """Setup environment variables for Agent SDK.
@@ -109,7 +114,7 @@ class BaseTool(ABC):
 
         os.environ["KIMI_API_KEY"] = api_key
         os.environ["KIMI_BASE_URL"] = base_url
-        os.environ["KIMI_MODEL_NAME"] = self.AGENT_MODEL
+        os.environ["KIMI_MODEL_NAME"] = self.agent_model
         return api_key
 
     def clone_repo(self, repo_name: str, work_dir: str, branch: str = None) -> bool:
@@ -217,7 +222,7 @@ class BaseTool(ABC):
         try:
             async with await Session.create(
                 work_dir=work_dir_kaos,
-                model=self.AGENT_MODEL,
+                model=self.agent_model,
                 yolo=True,
                 max_steps_per_turn=100,
                 skills_dir=skills_dir_kaos,

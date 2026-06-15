@@ -1,0 +1,39 @@
+src/main.py
+  s_66f24084a2a294::t_537394a21d7088 24-41
+  s_66f24084a2a294::t_ce3661d8a32e51 102,106-107,110-126
+  s_66f24084a2a294::t_df4eafaa864e93 108-109
+README.md
+  s_66f24084a2a294::t_78e53b447d4008 158
+  s_66f24084a2a294::t_98a3d044b03c57 146
+  s_66f24084a2a294::t_e2eb7c13138347 119-121
+  s_66f24084a2a294::t_8c2eb6656426f1 225
+  s_66f24084a2a294::t_dadca52aa94500 176-192
+src/github_client.py
+  s_66f24084a2a294::t_3f5905d2be645b 469-495
+.github/workflows/ci.yml
+  s_66f24084a2a294::t_c5f164289b93da 13-14,16,29-30,32
+tests/test_github_client.py
+  s_66f24084a2a294::t_129a9b1ba7e1a4 104-131
+.github/workflows/test-action.yml
+  s_66f24084a2a294::t_56ceeff3ba10a0 31
+  s_66f24084a2a294::t_4460ebc90f1e4b 43
+tests/test_main_events.py
+  s_66f24084a2a294::t_137bb1b191ac9e 232-358
+  s_66f24084a2a294::t_c3add862592fcb 11-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "252b415d0db5120d87c59e726f51c17df7f944d7",
+  "prompts": {},
+  "sessions": {
+    "s_66f24084a2a294": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f12e7d43-e53b-44a0-b68e-7e304fe9df3a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Artur Kuzmin <artursregs@gmail.com>"
+    }
+  }
+}

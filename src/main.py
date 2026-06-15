@@ -1,4 +1,4 @@
-"""Main entry point for Kimi Code Review Action."""
+"""Main entry point for AI Code Review Action."""
 
 import json
 import logging
@@ -339,7 +339,7 @@ def handle_comment_event(event: dict, config: ActionConfig):
 
 def get_help_message() -> str:
     """Get help message with available commands."""
-    return """## 🌗 Kimi Actions Help
+    return """## 🌗 AI Code Review Help
 
 ### Available Commands
 

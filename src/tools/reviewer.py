@@ -461,7 +461,7 @@ class Reviewer(BaseTool):
             "",
             overview,
             "",
-            f"**Verdict:** {verdict_label} · Kimi reviewed "
+            f"**Verdict:** {verdict_label} · AI reviewed "
             f"{len(reviewed_files)} changed file(s) and found {n} issue(s).",
         ]
         if issues:

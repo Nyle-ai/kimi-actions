@@ -163,7 +163,7 @@ def build_markdown(
     rows.append("| " + " | ".join(total_line) + " |")
 
     out = [
-        "## 🌗 Kimi review — spend by stage",
+        "## 🌗 AI Code Review — spend by stage",
         "",
         f"Model: `{model}` · total **{_fmt_int(totals['total_tokens'])} tokens**"
         + (f" · ~**{quota:.1f}%** of quota window" if quota is not None else "")

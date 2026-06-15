@@ -14,7 +14,7 @@ import subprocess
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Callable, Optional, TypeVar
+from typing import Any, Callable, Dict, List, Optional, TypeVar
 
 from action_config import get_action_config, DEFAULT_MODEL, DEFAULT_BASE_URL
 from github_client import GitHubClient
@@ -29,6 +29,13 @@ T = TypeVar("T")
 AGENT_TIMEOUT_SECONDS = int(os.environ.get("KIMI_AGENT_TIMEOUT", "900"))
 RETRY_BACKOFF = [5, 10, 20, 30]
 HEARTBEAT_INTERVAL = 30
+
+# Token usage fields carried by kosong's TokenUsage (cache-aware).
+_USAGE_FIELDS = ("input_other", "input_cache_read", "input_cache_creation", "output")
+
+
+def _zero_usage() -> Dict[str, int]:
+    return {f: 0 for f in _USAGE_FIELDS} | {"calls": 0}
 
 
 def with_retry(
@@ -67,6 +74,12 @@ class BaseTool(ABC):
         # Skill management
         self.skill_manager = SkillManager()
         self.repo_config: Optional[RepoConfig] = None
+
+        # Per-stage spend instrumentation: run_agent accumulates the most recent
+        # call's token usage into _last_usage; run_agent_reliably rolls each stage
+        # (incl. retries) up into stage_metrics for the run summary.
+        self.stage_metrics: List[Dict[str, Any]] = []
+        self._last_usage: Dict[str, int] = _zero_usage()
 
     @property
     @abstractmethod
@@ -223,8 +236,9 @@ class BaseTool(ABC):
         Returns:
             Agent response text
         """
+        self._last_usage = _zero_usage()
         try:
-            from kimi_agent_sdk import Session, ApprovalRequest, TextPart
+            from kimi_agent_sdk import Session, ApprovalRequest, TextPart, StatusUpdate
             from kaos.path import KaosPath
         except ImportError:
             logger.error("kimi-agent-sdk not installed")
@@ -259,6 +273,8 @@ class BaseTool(ABC):
                         text_parts.append(msg.text)
                     elif isinstance(msg, ApprovalRequest):
                         msg.resolve("approve")
+                    elif isinstance(msg, StatusUpdate):
+                        self._accumulate_usage(getattr(msg, "token_usage", None))
 
             response = "".join(text_parts)
             logger.info(
@@ -270,6 +286,26 @@ class BaseTool(ABC):
         except Exception as e:
             logger.error(f"Agent execution failed: {e}")
             return ""
+
+    def _accumulate_usage(self, token_usage: Any) -> None:
+        """Add one step's TokenUsage (from a StatusUpdate wire message) to _last_usage."""
+        if token_usage is None:
+            return
+        for field in _USAGE_FIELDS:
+            self._last_usage[field] += int(getattr(token_usage, field, 0) or 0)
+        self._last_usage["calls"] += 1
+
+    def _record_stage(
+        self, label: str, start: float, usage: Dict[str, int], attempts: int
+    ) -> None:
+        """Append a per-stage spend row for the run summary."""
+        row: Dict[str, Any] = {
+            "stage": label,
+            "seconds": round(time.monotonic() - start, 1),
+            "attempts": attempts,
+        }
+        row.update(usage)
+        self.stage_metrics.append(row)
 
     async def _heartbeat(self, label: str) -> None:
         """Emit a periodic log line so long agent runs don't look hung."""
@@ -291,7 +327,11 @@ class BaseTool(ABC):
         Retries when the stage times out or returns no output. Returns "" if every attempt
         fails so the caller can decide how to degrade.
         """
+        stage_start = time.monotonic()
+        stage_usage = _zero_usage()
+        attempts_used = 0
         for attempt in range(len(RETRY_BACKOFF) + 1):
+            attempts_used += 1
             hb = asyncio.create_task(self._heartbeat(label))
             try:
                 result = await asyncio.wait_for(
@@ -306,7 +346,12 @@ class BaseTool(ABC):
                 with contextlib.suppress(asyncio.CancelledError):
                     await hb
 
+            # Count this attempt's tokens — retries are real spend.
+            for field in stage_usage:
+                stage_usage[field] += self._last_usage.get(field, 0)
+
             if result.strip():
+                self._record_stage(label, stage_start, stage_usage, attempts_used)
                 return result
 
             if attempt < len(RETRY_BACKOFF):
@@ -314,5 +359,6 @@ class BaseTool(ABC):
                 logger.warning(f"{label} produced no output; retrying in {delay}s")
                 await asyncio.sleep(delay)
 
+        self._record_stage(label, stage_start, stage_usage, attempts_used)
         logger.error(f"{label} failed after {len(RETRY_BACKOFF) + 1} attempts")
         return ""

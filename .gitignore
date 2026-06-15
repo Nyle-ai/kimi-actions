@@ -38,3 +38,6 @@ eval/eval_*.json
 eval/eval_*.log
 eval/eval_checkpoint.json
 test
+
+# Kimi review run artifacts (per-run spend metrics / trajectory)
+.kimi-review/

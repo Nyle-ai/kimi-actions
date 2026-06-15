@@ -8,7 +8,12 @@ import os
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from main import handle_review_comment_event, parse_command
+from main import (
+    handle_review_comment_event,
+    handle_pr_event,
+    parse_command,
+    DRAFT_SKIP_MARKER,
+)
 from action_config import ActionConfig
 
 
@@ -224,3 +229,130 @@ class TestHandleReviewCommentEvent:
             mock_github.post_comment.assert_called_once()
             comment_args = mock_github.post_comment.call_args
             assert "Answer" in comment_args[0][2]
+
+
+class TestHandlePrEvent:
+    """Tests for pull_request event handler — draft auto-review gating."""
+
+    @pytest.fixture
+    def mock_config(self):
+        config = Mock(spec=ActionConfig)
+        config.github_token = "test_token"
+        config.kimi_api_key = "test_key"
+        config.kimi_base_url = "https://api.moonshot.cn/v1"
+        return config
+
+    @pytest.fixture
+    def draft_pr_event(self):
+        """A draft PR just opened (the first sent version)."""
+        return {
+            "action": "opened",
+            "pull_request": {"number": 42, "draft": True},
+            "repository": {"full_name": "owner/repo"},
+        }
+
+    def test_draft_first_version_is_reviewed(self, mock_config, draft_pr_event):
+        """First version of a draft (no prior review) gets reviewed."""
+        with (
+            patch("main.GitHubClient") as MockGitHub,
+            patch("main.Reviewer") as MockReviewer,
+            patch("main.get_input", return_value="true"),
+        ):
+            mock_github = Mock()
+            mock_github.get_last_bot_comment.return_value = None  # never reviewed
+            MockGitHub.return_value = mock_github
+
+            mock_reviewer = Mock()
+            mock_reviewer.run.return_value = "SUMMARY <!-- kimi-review:sha=abc -->"
+            MockReviewer.return_value = mock_reviewer
+
+            handle_pr_event(draft_pr_event, mock_config)
+
+            mock_reviewer.run.assert_called_once_with("owner/repo", 42)
+            mock_github.post_comment.assert_called_once()
+            assert "SUMMARY" in mock_github.post_comment.call_args[0][2]
+
+    def test_draft_resync_skips_and_posts_dedup_notice(
+        self, mock_config, draft_pr_event
+    ):
+        """Later pushes to a draft skip review and refresh a single skip notice."""
+        draft_pr_event["action"] = "synchronize"
+        with (
+            patch("main.GitHubClient") as MockGitHub,
+            patch("main.Reviewer") as MockReviewer,
+            patch("main.get_input", return_value="true"),
+        ):
+            mock_github = Mock()
+            # A prior review already exists on this PR.
+            mock_github.get_last_bot_comment.return_value = {
+                "sha": "abc123",
+                "comment_id": 7,
+            }
+            MockGitHub.return_value = mock_github
+
+            mock_reviewer = Mock()
+            MockReviewer.return_value = mock_reviewer
+
+            handle_pr_event(draft_pr_event, mock_config)
+
+            # No review runs on a draft resync.
+            mock_reviewer.run.assert_not_called()
+            # Older skip notice(s) are deleted before posting a fresh one.
+            mock_github.delete_issue_comments_with_marker.assert_called_once_with(
+                "owner/repo", 42, DRAFT_SKIP_MARKER
+            )
+            mock_github.post_comment.assert_called_once()
+            posted = mock_github.post_comment.call_args[0][2]
+            assert DRAFT_SKIP_MARKER in posted
+            assert "/review" in posted
+            assert "Ready for review" in posted
+            # The skip notice must NOT masquerade as a review (no sha marker), or it
+            # would be mistaken for the original review and break dedup/detection.
+            assert "kimi-review:sha=" not in posted
+
+    def test_ready_for_review_runs_review_and_clears_notice(
+        self, mock_config, draft_pr_event
+    ):
+        """Draft -> ready transition reviews and removes the stale skip notice."""
+        draft_pr_event["action"] = "ready_for_review"
+        draft_pr_event["pull_request"]["draft"] = False
+        with (
+            patch("main.GitHubClient") as MockGitHub,
+            patch("main.Reviewer") as MockReviewer,
+            patch("main.get_input", return_value="true"),
+        ):
+            mock_github = Mock()
+            mock_github.get_last_bot_comment.return_value = {
+                "sha": "abc123",
+                "comment_id": 7,
+            }
+            MockGitHub.return_value = mock_github
+
+            mock_reviewer = Mock()
+            mock_reviewer.run.return_value = "SUMMARY"
+            MockReviewer.return_value = mock_reviewer
+
+            handle_pr_event(draft_pr_event, mock_config)
+
+            mock_reviewer.run.assert_called_once_with("owner/repo", 42)
+            mock_github.delete_issue_comments_with_marker.assert_called_once_with(
+                "owner/repo", 42, DRAFT_SKIP_MARKER
+            )
+
+    def test_auto_review_disabled_does_nothing(self, mock_config, draft_pr_event):
+        """With auto_review off, the pull_request path takes no action."""
+        with (
+            patch("main.GitHubClient") as MockGitHub,
+            patch("main.Reviewer") as MockReviewer,
+            patch("main.get_input", return_value="false"),
+        ):
+            mock_github = Mock()
+            MockGitHub.return_value = mock_github
+            mock_reviewer = Mock()
+            MockReviewer.return_value = mock_reviewer
+
+            handle_pr_event(draft_pr_event, mock_config)
+
+            mock_reviewer.run.assert_not_called()
+            mock_github.post_comment.assert_not_called()
+            mock_github.delete_issue_comments_with_marker.assert_not_called()

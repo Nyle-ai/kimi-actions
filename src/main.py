@@ -21,6 +21,24 @@ if os.environ.get("KIMI_LOG_HTTPX", "") != "1":
     logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
+# Hidden marker on the draft-skip status notice so we can find and replace it (keeping a
+# single, fresh notice). Distinct from the review summary's ``kimi-review:sha=...`` marker,
+# so deleting skip notices never removes the original review.
+DRAFT_SKIP_MARKER = "<!-- kimi-review:draft-skip -->"
+
+
+def _draft_skip_notice() -> str:
+    """Status comment posted when auto-review is paused on a draft PR."""
+    return (
+        "🌗 **Draft PR — auto-review paused.**\n\n"
+        "I reviewed the first version of this draft and won't auto-review further pushes "
+        "while it stays in draft (this saves tokens on work-in-progress).\n\n"
+        "- 💬 Comment `/review` to review the current changes now — this works even on a "
+        "draft.\n"
+        "- ✅ Mark the PR **Ready for review** and I'll automatically review it again.\n\n"
+        f"{DRAFT_SKIP_MARKER}"
+    )
+
 
 def get_input(name: str, default: str = None) -> str:
     """Get action input from environment."""
@@ -81,14 +99,31 @@ def handle_pr_event(event: dict, config: ActionConfig):
 
     # Auto actions on PR open/sync
     auto_review = get_input("auto_review", "true").lower() == "true"
+    is_draft = bool(event.get("pull_request", {}).get("draft", False))
 
     try:
         if auto_review:
-            logger.info("Running auto review...")
-            reviewer = Reviewer(github)
-            result = reviewer.run(repo_name, pr_number)
-            if result:
-                github.post_comment(repo_name, pr_number, result)
+            # On a draft PR we review only the first version (when no review exists yet),
+            # then pause until it's marked Ready for review or someone runs `/review`.
+            # (Skip the lookup entirely for non-draft PRs — the common path.)
+            if is_draft and github.get_last_bot_comment(repo_name, pr_number):
+                logger.info("Draft PR already reviewed once; pausing auto-review.")
+                # Keep a single, fresh skip notice: drop the stale one, post a new one.
+                github.delete_issue_comments_with_marker(
+                    repo_name, pr_number, DRAFT_SKIP_MARKER
+                )
+                github.post_comment(repo_name, pr_number, _draft_skip_notice())
+            else:
+                logger.info("Running auto review...")
+                reviewer = Reviewer(github)
+                result = reviewer.run(repo_name, pr_number)
+                if result:
+                    github.post_comment(repo_name, pr_number, result)
+                # A real review ran (first draft version, resync, or draft->ready):
+                # clear any stale skip notice so it doesn't linger.
+                github.delete_issue_comments_with_marker(
+                    repo_name, pr_number, DRAFT_SKIP_MARKER
+                )
 
         logger.info("Done!")
     except Exception as e:

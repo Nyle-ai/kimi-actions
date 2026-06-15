@@ -466,6 +466,33 @@ class GitHubClient:
                 }
         return None
 
+    def delete_issue_comments_with_marker(
+        self, repo_name: str, pr_number: int, marker: str
+    ) -> int:
+        """Delete PR issue comments whose body contains ``marker``.
+
+        Used to keep a single, fresh status notice (e.g. the draft-skip notice): delete the
+        stale one(s), then post a new one. Only comments carrying the exact ``marker`` are
+        removed, so the review summary — which uses a different marker
+        (``<!-- kimi-review:sha=... -->``) — is never touched.
+
+        Returns the number of comments deleted.
+        """
+        pr = self.get_pr(repo_name, pr_number)
+        deleted = 0
+        for comment in pr.get_issue_comments():
+            if marker in (comment.body or ""):
+                try:
+                    comment.delete()
+                    deleted += 1
+                except GithubException as e:
+                    logger.warning(f"Failed to delete comment {comment.id}: {e}")
+        if deleted:
+            logger.info(
+                f"Deleted {deleted} comment(s) matching marker on PR #{pr_number}"
+            )
+        return deleted
+
     # === Issue Operations ===
 
     def get_issue(self, repo_name: str, issue_number: int) -> Issue:

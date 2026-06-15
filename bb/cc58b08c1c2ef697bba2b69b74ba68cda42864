@@ -1,0 +1,19 @@
+.gitignore
+  s_3f1755f0be85d5::t_17646385ff6218 41-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "bbcc58b08c1c2ef697bba2b69b74ba68cda42864",
+  "prompts": {},
+  "sessions": {
+    "s_3f1755f0be85d5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "752d3766-4fbf-4ade-8864-66f311683ceb",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Artur Kuzmin <artursregs@gmail.com>"
+    }
+  }
+}

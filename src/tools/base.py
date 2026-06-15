@@ -121,13 +121,9 @@ class BaseTool(ABC):
 
     def format_footer(self, extra_info: str = "") -> str:
         """Generate standard footer for tool output."""
-        model_info = f"`{self.agent_model}`"
-
-        footer = f"---\n<sub>Powered by [Kimi](https://kimi.com/) | Model: {model_info}"
+        footer = "---"
         if extra_info:
-            footer += f" | {extra_info}"
-        footer += "</sub>"
-
+            footer += f"\n<sub>{extra_info}</sub>"
         return footer
 
     @property

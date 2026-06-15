@@ -26,6 +26,13 @@ logger = logging.getLogger(__name__)
 # Token fields carried by kosong's TokenUsage (cache-aware).
 TOKEN_FIELDS = ("input_other", "input_cache_read", "input_cache_creation", "output")
 
+# Source: https://platform.kimi.ai/docs/pricing/chat-k27-code
+# "input" = cache-miss rate, "cache_read" = cache-hit rate, "output" = output rate ($/MTok)
+BUILTIN_PRICE_TABLE: Dict[str, Dict[str, float]] = {
+    "kimi-k2.7-code": {"input": 0.95, "output": 4.00, "cache_read": 0.19},
+    "kimi-k2.7-code-highspeed": {"input": 1.90, "output": 8.00, "cache_read": 0.38},
+}
+
 
 def _input(row: Dict[str, Any]) -> int:
     return (
@@ -57,21 +64,24 @@ def summarize(stage_metrics: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def load_price_table() -> Dict[str, Dict[str, float]]:
-    """Per-model $/Mtok price table for the *shadow* cost.
+    """Per-model $/MTok price table for the shadow cost.
 
-    Populated from ``KIMI_PRICE_TABLE_JSON`` (a JSON object like
-    ``{"kimi-k2.7-code": {"input": 0.15, "output": 0.6, "cache_read": 0.015}}``).
-    Empty by default — shadow cost is omitted rather than guessed.
+    Starts from ``BUILTIN_PRICE_TABLE`` (kimi-k2.7-code rates baked in).
+    ``KIMI_PRICE_TABLE_JSON`` overlays / overrides entries — useful for other
+    models or updated rates without a code change.
     """
+    table = dict(BUILTIN_PRICE_TABLE)
     raw = os.environ.get("KIMI_PRICE_TABLE_JSON", "").strip()
-    if not raw:
-        return {}
-    try:
-        table = json.loads(raw)
-        return table if isinstance(table, dict) else {}
-    except (ValueError, TypeError):
-        logger.warning("KIMI_PRICE_TABLE_JSON is not valid JSON; ignoring")
-        return {}
+    if raw:
+        try:
+            overrides = json.loads(raw)
+            if isinstance(overrides, dict):
+                table.update(overrides)
+            else:
+                logger.warning("KIMI_PRICE_TABLE_JSON is not a JSON object; ignoring")
+        except (ValueError, TypeError):
+            logger.warning("KIMI_PRICE_TABLE_JSON is not valid JSON; ignoring")
+    return table
 
 
 def shadow_cost_usd(
@@ -163,12 +173,12 @@ def build_markdown(
         "|" + "|".join(["---"] * len(header)) + "|",
         *rows,
     ]
-    if shadow_usd is None:
+    if quota is None:
         out += [
             "",
             "<sub>Subscription endpoint: no per-call charge — tokens are the quota proxy. "
-            "Set `KIMI_PRICE_TABLE_JSON` for a reference shadow $, "
-            "`KIMI_QUOTA_TOKENS_PER_WINDOW` for quota %.</sub>",
+            "Set `KIMI_QUOTA_TOKENS_PER_WINDOW` to show quota %. "
+            "Override prices via `KIMI_PRICE_TABLE_JSON`.</sub>",
         ]
     return "\n".join(out)
 

@@ -125,6 +125,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  issues: write        # add the 👀 ack reaction to /review and /ask comments (see note below)
 
 jobs:
   kimi-review:
@@ -164,6 +165,12 @@ jobs:
           auto_review: 'false'  # Use /review command instead
 ```
 
+> **Why `issues: write`?** The action adds a 👀 reaction to the triggering `/review` or `/ask`
+> comment to acknowledge it. On a pull request, conversation comments are *issue comments* in
+> GitHub's REST API, so adding a reaction to them requires `issues: write` — `pull-requests: write`
+> alone is not enough. Without it the review still runs, but the reaction call fails with
+> `403: Resource not accessible by integration`.
+
 ## Commands
 
 ### PR Commands
@@ -184,6 +191,37 @@ Use these commands in PR comments:
 - The bot tracks the last reviewed commit SHA
 - If you run `/review` again without new commits, it will show "✅ No new changes since last review"
 - This prevents wasting tokens on unchanged code
+
+## Observability (spend & trajectory)
+
+Every `/review` records **per-stage spend** (Planner / Executor / QA) and emits it three ways:
+
+- A **Step Summary** table on the Actions run page — tokens in/out, cache hits, calls, wall-time.
+- A **`run-metadata.json`** trajectory record + the per-stage handoff JSONs, written to
+  `.kimi-review/` in the workspace. Add an upload step to keep them for later analysis:
+
+  ```yaml
+        - name: Upload Kimi review trajectory
+          if: always()
+          uses: actions/upload-artifact@v4
+          with:
+            name: kimi-review-${{ github.event.pull_request.number || github.event.issue.number }}
+            path: .kimi-review/
+            if-no-files-found: ignore
+            retention-days: 30
+  ```
+
+- A one-line operator log: `review spend — N tokens (in X / out Y) across K calls, Ts`.
+
+On the flat-rate Kimi **subscription** endpoint there is no per-call charge, so **tokens are the
+quota proxy** — a single review pass can be a meaningful slice of the rolling quota window. Optional
+env knobs:
+
+| Env var | Effect |
+|---------|--------|
+| `KIMI_QUOTA_TOKENS_PER_WINDOW` | Tokens that exhaust your quota window → shows `~N% of quota` per run |
+| `KIMI_PRICE_TABLE_JSON` | e.g. `{"kimi-k2.7-code": {"input": 0.15, "output": 0.6, "cache_read": 0.015}}` → adds a reference "shadow $" (metered-API rate, **not** an invoice) |
+| `KIMI_LOG_HTTPX=1` | Re-enable the per-request `httpx` log lines (silenced by default) |
 
 ## Configuration
 

@@ -14,6 +14,11 @@ from tools import Reviewer, Ask
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
+# Silence per-request "HTTP Request: POST .../chat/completions 200 OK" noise from the
+# Kimi client — one line per LLM call drowns the useful logs. Per-stage token/latency
+# spend is captured structurally instead (see run_metrics). Override with KIMI_LOG_HTTPX=1.
+if os.environ.get("KIMI_LOG_HTTPX", "") != "1":
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 

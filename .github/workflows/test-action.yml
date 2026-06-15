@@ -9,6 +9,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  issues: write  # add 👀 ack reaction to /review and /ask comments (PR comments are issue comments)
 
 concurrency:
   group: kimi-review-${{ github.event.issue.number || github.event.pull_request.number || github.ref }}

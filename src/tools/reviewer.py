@@ -19,6 +19,7 @@ from tools.base import BaseTool, with_retry
 from diff_filter import filter_files
 from sanitize import fence, sanitize_untrusted
 from ticket_context import resolve_ticket_context
+import run_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,7 @@ class Reviewer(BaseTool):
         ticket = resolve_ticket_context(pr, self.repo_config, self.config)
         ticket_block = self._format_ticket(ticket)
 
+        metrics_out = run_metrics.metrics_dir()
         with tempfile.TemporaryDirectory() as work_dir:
             logger.info(f"Cloning {repo_name} (branch: {pr.head.ref}) to {work_dir}")
             if not self.clone_repo(repo_name, work_dir, branch=pr.head.ref):
@@ -88,9 +90,26 @@ class Reviewer(BaseTool):
                 logger.error(f"Review pipeline failed: {e}")
                 return self._error_comment(str(e))
 
+            # Preserve the per-stage handoff JSONs (trajectory) before the temp dir is cleaned.
+            run_metrics.snapshot_handoffs(
+                work_dir, metrics_out, [PLAN_FILE, DRAFT_FILE, QA_FILE]
+            )
+
         issues = qa.get("issues", []) if isinstance(qa, dict) else []
         verdict = qa.get("verdict", "comment") if isinstance(qa, dict) else "comment"
         summary = qa.get("summary", "") if isinstance(qa, dict) else ""
+
+        # Spend-by-stage summary (Step Summary table + run-metadata.json trajectory record).
+        run_metrics.emit(
+            repo=repo_name,
+            pr_number=pr_number,
+            sha=pr.head.sha or "",
+            model=self.agent_model,
+            stage_metrics=self.stage_metrics,
+            verdict=verdict,
+            num_issues=len(issues),
+            dest_dir=metrics_out,
+        )
 
         # POSTER: inline comments + auto-resolve (best-effort side effects).
         self._post_inline(repo_name, pr_number, issues)

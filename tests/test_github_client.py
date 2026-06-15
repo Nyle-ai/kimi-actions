@@ -101,6 +101,34 @@ class TestGitHubClientPR:
         # Should call create_review
         assert mock_pr.create_review.called
 
+    def test_delete_issue_comments_with_marker(self, mock_github_api):
+        """Deletes only comments carrying the marker — never the review summary."""
+        from github_client import GitHubClient
+
+        mock_github, mock_repo = mock_github_api
+        mock_pr = Mock()
+
+        review = Mock(body="Review summary\n<!-- kimi-review:sha=abc123 -->")
+        old_skip = Mock(body="Old skip notice\n<!-- kimi-review:draft-skip -->")
+        human = Mock(body="Looks good to me!")
+        another_skip = Mock(body="Another skip\n<!-- kimi-review:draft-skip -->")
+        mock_pr.get_issue_comments = Mock(
+            return_value=[review, old_skip, human, another_skip]
+        )
+        mock_repo.get_pull = Mock(return_value=mock_pr)
+
+        client = GitHubClient("fake-token")
+        deleted = client.delete_issue_comments_with_marker(
+            "owner/repo", 123, "<!-- kimi-review:draft-skip -->"
+        )
+
+        assert deleted == 2
+        old_skip.delete.assert_called_once()
+        another_skip.delete.assert_called_once()
+        # The review summary and human comments must be left untouched.
+        review.delete.assert_not_called()
+        human.delete.assert_not_called()
+
 
 class TestGitHubClientIssue:
     """Test Issue operations."""

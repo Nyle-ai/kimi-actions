@@ -64,10 +64,28 @@ def test_build_markdown_has_stages_and_total():
 
 
 def test_load_price_table(monkeypatch):
+    # Custom entry overlays built-in table
     monkeypatch.setenv("KIMI_PRICE_TABLE_JSON", '{"m": {"input": 1, "output": 2}}')
-    assert run_metrics.load_price_table()["m"]["output"] == 2
+    table = run_metrics.load_price_table()
+    assert table["m"]["output"] == 2
+    assert "kimi-k2.7-code" in table  # built-in still present
+
+    # Invalid JSON falls back to built-in only
     monkeypatch.setenv("KIMI_PRICE_TABLE_JSON", "not json")
-    assert run_metrics.load_price_table() == {}
+    table = run_metrics.load_price_table()
+    assert "kimi-k2.7-code" in table
+    assert "m" not in table
+
+
+def test_builtin_pricing():
+    t = run_metrics.summarize(STAGES)
+    table = run_metrics.load_price_table()
+    cost = run_metrics.shadow_cost_usd(t, "kimi-k2.7-code", table)
+    assert cost is not None
+    # Verify formula: uncached * 0.95 + cache_read * 0.19 + output * 4.00 (per MTok)
+    uncached = t["input_other"] + t["input_cache_creation"]
+    expected = (uncached / 1e6 * 0.95) + (t["input_cache_read"] / 1e6 * 0.19) + (t["output"] / 1e6 * 4.00)
+    assert cost == round(expected, 4)
 
 
 def test_snapshot_handoffs(tmp_path):

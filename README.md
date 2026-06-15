@@ -116,7 +116,9 @@ name: Kimi Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    # `ready_for_review` is NOT in the default set — without it, marking a draft PR
+    # "Ready for review" does not trigger a run. Keep it so draft→ready auto-reviews.
+    types: [opened, synchronize, reopened, ready_for_review]
   issue_comment:
     types: [created]
   pull_request_review_comment:
@@ -141,7 +143,7 @@ jobs:
       - name: Get PR ref (for comments)
         id: get-pr
         if: github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const prNumber = context.issue?.number || context.payload.pull_request?.number;
@@ -153,7 +155,7 @@ jobs:
             core.setOutput('ref', pr.data.head.ref);
             core.setOutput('sha', pr.data.head.sha);
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment') && steps.get-pr.outputs.ref || github.head_ref }}
 
@@ -170,6 +172,23 @@ jobs:
 > GitHub's REST API, so adding a reaction to them requires `issues: write` — `pull-requests: write`
 > alone is not enough. Without it the review still runs, but the reaction call fails with
 > `403: Resource not accessible by integration`.
+
+### Auto-review & draft PRs
+
+The example above is **command-driven** (`auto_review: 'false'`) — reviews run only when you
+comment `/review`. To review automatically on every push, set `auto_review: 'true'`.
+
+With auto-review on, **draft PRs are handled specially to avoid burning tokens on
+work-in-progress**:
+
+- The **first version** of a draft is reviewed.
+- Further pushes while it stays a draft are **skipped** — the bot leaves a single status
+  comment explaining the pause (refreshed, not duplicated, on each push).
+- The pause does not block you: comment **`/review`** to review the current changes even on a
+  draft.
+- Marking the PR **Ready for review** automatically reviews it again — but only if your `on:`
+  block lists `ready_for_review` in `pull_request.types` (it is **not** in GitHub's default
+  set). The example above already includes it.
 
 ## Commands
 
@@ -203,7 +222,7 @@ Every `/review` records **per-stage spend** (Planner / Executor / QA) and emits 
   ```yaml
         - name: Upload Kimi review trajectory
           if: always()
-          uses: actions/upload-artifact@v4
+          uses: actions/upload-artifact@v7
           with:
             name: kimi-review-${{ github.event.pull_request.number || github.event.issue.number }}
             path: .kimi-review/

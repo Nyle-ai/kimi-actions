@@ -227,6 +227,45 @@ class TestPipeline:
         assert ran.call_count == 1
 
     @pytest.mark.asyncio
+    async def test_ticket_context_reaches_planner(self, mock_action_config, tmp_path):
+        from tools.reviewer import Reviewer
+
+        reviewer = Reviewer(MockGitHubClient())
+        reviewer.repo_config = None
+        skill = Mock(instructions="rubric", path=None)
+        captured = {}
+
+        async def fake_stage(work_dir, prompt, label="agent"):
+            captured[label] = prompt
+            with open(os.path.join(work_dir, "review-plan.json"), "w") as f:
+                f.write('{"issues": []}')
+            return ""
+
+        with patch.object(reviewer, "run_agent_reliably", side_effect=fake_stage):
+            await reviewer._run_pipeline(
+                str(tmp_path),
+                skill,
+                "title",
+                "a -> b",
+                "diff",
+                ticket_context="## Linked ticket\n- ID: ENG-1",
+            )
+        assert "Linked ticket" in captured["planner"]
+        assert "ENG-1" in captured["planner"]
+
+    def test_format_ticket(self, mock_action_config):
+        from tools.reviewer import Reviewer
+        from ticket_context import TicketContext
+
+        reviewer = Reviewer(MockGitHubClient())
+        assert reviewer._format_ticket(None) == ""
+        out = reviewer._format_ticket(
+            TicketContext(id="ENG-1", title="Add x", description="do x", status="Open")
+        )
+        assert "Linked ticket" in out
+        assert "ENG-1" in out and "Add x" in out and "do x" in out
+
+    @pytest.mark.asyncio
     async def test_full_three_stage_handoff(self, mock_action_config, tmp_path):
         from tools.reviewer import Reviewer
 

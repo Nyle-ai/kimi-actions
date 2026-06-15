@@ -74,6 +74,11 @@ class ActionConfig:
     enable_inline_comments: bool = True
     enable_auto_resolve: bool = True
 
+    # Ticket context secrets (optional; provider selected per-repo in .kimi-config.yml)
+    clickup_token: str = ""
+    clickup_team_id: str = ""
+    linear_api_key: str = ""
+
     # File filtering
     exclude_patterns: List[str] = field(
         default_factory=lambda: [
@@ -128,6 +133,11 @@ class ActionConfig:
         config.enable_auto_resolve = (
             os.environ.get("INPUT_ENABLE_AUTO_RESOLVE", "true").lower() == "true"
         )
+
+        # Ticket context secrets
+        config.clickup_token = os.environ.get("INPUT_CLICKUP_TOKEN", "")
+        config.clickup_team_id = os.environ.get("INPUT_CLICKUP_TEAM_ID", "")
+        config.linear_api_key = os.environ.get("INPUT_LINEAR_API_KEY", "")
 
         # Exclude patterns
         exclude_str = os.environ.get("INPUT_EXCLUDE_PATTERNS", "")

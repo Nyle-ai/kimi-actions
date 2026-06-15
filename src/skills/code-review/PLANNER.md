@@ -12,6 +12,9 @@ to verify. You do **not** post anything and you do **not** write fixes yet.
 - Apply the shared rubric and the **"What NOT to flag"** list from the review instructions. Be
   biased toward a short, high-signal list. Prefer 0–3 real candidates over a long noisy one.
 - Respect the enabled categories and any extra instructions provided in the context.
+- If a **Linked ticket** section is provided, check whether the change actually implements its stated
+  intent. Flag clear mismatches — a missing requirement, or changes well outside the ticket's scope —
+  as candidate issues. Do not nitpick wording; only raise substantive gaps.
 
 ## Output — write JSON to `review-plan.json`
 Write a file named `review-plan.json` in the working directory with this exact shape:

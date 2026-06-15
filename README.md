@@ -245,6 +245,32 @@ ignore_files:
 # Extra instructions
 extra_instructions: |
   Focus on security issues.
+
+# Ticket context (optional) — see "Ticket context" below
+ticket:
+  provider: linear   # or "clickup"
+```
+
+### Ticket context (ClickUp / Linear)
+
+When enabled, the reviewer resolves the ticket referenced by the PR (scanning the title, branch,
+commits, then body for an id like `ENG-123`) and feeds the ticket's **intent** to the Planner so it
+can flag code-vs-requirement gaps. It is **opt-in per repo** and **best-effort** — a failed lookup
+never blocks a review.
+
+1. Set `ticket.provider` to `clickup` or `linear` in `.kimi-config.yml`.
+2. Add the matching secret(s) to your workflow:
+
+```yaml
+- uses: xiaoju111a/kimi-actions@main
+  with:
+    kimi_api_key: ${{ secrets.KIMI_API_KEY }}
+    github_token: ${{ secrets.GITHUB_TOKEN }}
+    # ClickUp (resolves custom task ids; team id is required)
+    clickup_token: ${{ secrets.CLICKUP_TOKEN }}
+    clickup_team_id: ${{ secrets.CLICKUP_TEAM_ID }}
+    # Linear (looks up issues by team key + number)
+    linear_api_key: ${{ secrets.LINEAR_API_KEY }}
 ```
 
 ### Custom Skills (Claude Skills Standard)
@@ -417,8 +443,6 @@ This is useful for:
 
 ## Roadmap
 
-- **Ticket context** (ClickUp / Linear) — inject the linked ticket's intent so the reviewer can check
-  code against requirements.
 - **PR overview** — a one-shot summary comment with a mermaid diagram on PR open.
 
 ## Acknowledgments

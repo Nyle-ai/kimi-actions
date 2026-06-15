@@ -163,6 +163,27 @@ skills:
         assert len(config.validation_warnings) > 0
         assert any("deprecated" in w.lower() for w in config.validation_warnings)
 
+    def test_parse_ticket_provider(self):
+        content = """
+ticket:
+  provider: linear
+"""
+        config, result = parse_repo_config(content)
+
+        assert result.valid is True
+        assert config.ticket_provider == "linear"
+
+    def test_parse_invalid_ticket_provider_warns(self):
+        content = """
+ticket:
+  provider: jira
+"""
+        config, result = parse_repo_config(content)
+
+        # Unknown provider is a warning, not an error.
+        assert result.valid is True
+        assert any("provider" in w.lower() for w in config.validation_warnings)
+
 
 class TestRepoConfig:
     """Tests for RepoConfig dataclass."""
@@ -176,6 +197,7 @@ class TestRepoConfig:
         assert config.ignore_files == []
         assert config.extra_instructions == ""
         assert config.skill_overrides == {}
+        assert config.ticket_provider == ""
 
 
 class TestBuiltinSkillNames:

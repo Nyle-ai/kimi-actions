@@ -48,6 +48,18 @@ inputs:
     description: 'Auto-resolve previously-flagged review threads once the code is fixed'
     required: false
     default: 'true'
+  clickup_token:
+    description: 'ClickUp API token for ticket context (optional; enable via ticket.provider in .kimi-config.yml)'
+    required: false
+    default: ''
+  clickup_team_id:
+    description: 'ClickUp team/workspace id, required to resolve custom task ids'
+    required: false
+    default: ''
+  linear_api_key:
+    description: 'Linear API key for ticket context (optional; enable via ticket.provider in .kimi-config.yml)'
+    required: false
+    default: ''
 
 outputs:
   review_comment:

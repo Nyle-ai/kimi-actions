@@ -62,6 +62,9 @@ class RepoConfig:
     ignore_files: List[str] = field(default_factory=list)
     extra_instructions: str = ""
 
+    # Ticket context provider: "" (disabled), "clickup", or "linear"
+    ticket_provider: str = ""
+
     # Category toggles
     enable_bug: bool = True
     enable_performance: bool = True
@@ -101,6 +104,7 @@ def validate_config(data: dict) -> ConfigValidationResult:
         "skill_overrides",
         "ignore_files",
         "extra_instructions",
+        "ticket",
     }
     unknown_keys = set(data.keys()) - valid_keys
     if unknown_keys:
@@ -162,6 +166,19 @@ def validate_config(data: dict) -> ConfigValidationResult:
         if not isinstance(data["extra_instructions"], str):
             errors.append("'extra_instructions' must be a string")
 
+    # Validate 'ticket'
+    if "ticket" in data:
+        ticket = data["ticket"]
+        if not isinstance(ticket, dict):
+            errors.append("'ticket' must be an object")
+        else:
+            provider = ticket.get("provider", "")
+            if provider and provider not in {"clickup", "linear"}:
+                warnings.append(
+                    f"Unknown ticket provider: '{provider}'. "
+                    "Valid providers: clickup, linear"
+                )
+
     return ConfigValidationResult(
         valid=len(errors) == 0, errors=errors, warnings=warnings
     )
@@ -209,6 +226,9 @@ def parse_repo_config(content: str) -> Tuple[RepoConfig, ConfigValidationResult]
 
     config.ignore_files = data.get("ignore_files", [])
     config.extra_instructions = data.get("extra_instructions", "")
+
+    # Ticket provider
+    config.ticket_provider = (data.get("ticket") or {}).get("provider", "")
 
     return config, validation
 

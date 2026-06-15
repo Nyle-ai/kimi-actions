@@ -44,6 +44,15 @@ extra_instructions: |
   Focus on code maintainability.
 
 # =============================================================================
+# Ticket Context (optional)
+# =============================================================================
+# Resolve the ClickUp/Linear ticket linked to a PR (id like ENG-123 found in the
+# title, branch, commits or body) and feed its intent to the reviewer.
+# Requires the matching action secret(s): CLICKUP_TOKEN + CLICKUP_TEAM_ID, or LINEAR_API_KEY.
+# ticket:
+#   provider: linear   # or "clickup"
+
+# =============================================================================
 # Custom Skills (Claude Skills Standard)
 # =============================================================================
 # Create .kimi/skills/ directory in your repo:

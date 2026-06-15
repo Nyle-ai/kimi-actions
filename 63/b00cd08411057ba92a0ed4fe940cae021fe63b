@@ -1,0 +1,31 @@
+action.yml
+  s_3f1755f0be85d5::t_aa9cae742c9925 1
+src/run_metrics.py
+  s_3f1755f0be85d5::t_ee232fd0720022 166
+src/main.py
+  s_3f1755f0be85d5::t_d688d8602194be 342
+  s_3f1755f0be85d5::t_d50dcae2ab37b7 1
+README.md
+  s_3f1755f0be85d5::t_9b5831072b2614 1
+  s_3f1755f0be85d5::t_3e54477b561a28 133
+  s_3f1755f0be85d5::t_f8574a44829091 114-115
+  s_3f1755f0be85d5::t_50bad5acadf2d5 223,225,227
+src/tools/reviewer.py
+  s_3f1755f0be85d5::t_779f00af2384b0 464
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "63b00cd08411057ba92a0ed4fe940cae021fe63b",
+  "prompts": {},
+  "sessions": {
+    "s_3f1755f0be85d5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "752d3766-4fbf-4ade-8864-66f311683ceb",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Artur Kuzmin <artursregs@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+src/run_metrics.py
+  s_3f1755f0be85d5::t_5ee2e470eef1f6 176,180-181
+  s_3f1755f0be85d5::t_87f6f74f16ea6e 29-35
+  s_3f1755f0be85d5::t_b8067b705b3ca7 67,69-71,73,75-84
+tests/test_run_metrics.py
+  s_3f1755f0be85d5::t_e86ee333af731a 67,69-73,75-88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "80b906c6f34891312e1a680595d2980ede2f0375",
+  "prompts": {},
+  "sessions": {
+    "s_3f1755f0be85d5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "752d3766-4fbf-4ade-8864-66f311683ceb",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Artur Kuzmin <artursregs@gmail.com>"
+    }
+  }
+}

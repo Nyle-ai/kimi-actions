@@ -1,0 +1,23 @@
+README.md
+  s_3f1755f0be85d5::t_c751bb1dcb943d 229
+src/run_metrics.py
+  s_3f1755f0be85d5::t_8a44928d3b36cb 226-240,244
+tests/test_run_metrics.py
+  s_3f1755f0be85d5::t_dc02a87f7219ef 91-113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "76d36bad7632111d56514960221e8f49dc84a628",
+  "prompts": {},
+  "sessions": {
+    "s_3f1755f0be85d5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "752d3766-4fbf-4ade-8864-66f311683ceb",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Artur Kuzmin <artursregs@gmail.com>"
+    }
+  }
+}

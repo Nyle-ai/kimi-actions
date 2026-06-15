@@ -223,10 +223,25 @@ def write_step_summary(markdown: str) -> None:
         logger.warning(f"Could not write step summary: {e}")
 
 
+def workspace_root() -> str:
+    """Root that maps to the host workspace the upload-artifact step reads.
+
+    This action runs as a Docker container, where the host workspace is
+    bind-mounted at ``/github/workspace`` (``--workdir /github/workspace``).
+    ``$GITHUB_WORKSPACE`` inside the container is forwarded as the *host* path
+    (e.g. ``/home/runner/work/<repo>/<repo>``), which is NOT mounted — writing
+    there lands on the container's ephemeral FS and is lost on ``--rm``, so a
+    later upload step finds nothing. Prefer the mount point when it exists.
+    """
+    if os.path.isdir("/github/workspace"):
+        return "/github/workspace"
+    return os.environ.get("GITHUB_WORKSPACE", ".")
+
+
 def metrics_dir() -> str:
     """Persistent dir (in the workspace, so the upload-artifact step can grab it)."""
     base = os.environ.get("KIMI_METRICS_DIR") or os.path.join(
-        os.environ.get("GITHUB_WORKSPACE", "."), ".kimi-review"
+        workspace_root(), ".kimi-review"
     )
     os.makedirs(base, exist_ok=True)
     return base

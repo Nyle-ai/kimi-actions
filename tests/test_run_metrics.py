@@ -88,6 +88,29 @@ def test_builtin_pricing():
     assert cost == round(expected, 4)
 
 
+def test_metrics_dir_prefers_explicit(tmp_path, monkeypatch):
+    target = tmp_path / "explicit"
+    monkeypatch.setenv("KIMI_METRICS_DIR", str(target))
+    assert run_metrics.metrics_dir() == str(target)
+    assert target.is_dir()
+
+
+def test_metrics_dir_falls_back_to_workspace(tmp_path, monkeypatch):
+    # No /github/workspace on the test host → uses GITHUB_WORKSPACE/.kimi-review
+    monkeypatch.delenv("KIMI_METRICS_DIR", raising=False)
+    monkeypatch.setenv("GITHUB_WORKSPACE", str(tmp_path))
+    got = run_metrics.metrics_dir()
+    assert got == os.path.join(str(tmp_path), ".kimi-review")
+    assert os.path.isdir(got)
+
+
+def test_workspace_root_uses_mount_when_present(monkeypatch):
+    # Simulate Docker container action: /github/workspace exists as a dir.
+    monkeypatch.setattr(run_metrics.os.path, "isdir", lambda p: p == "/github/workspace")
+    monkeypatch.setenv("GITHUB_WORKSPACE", "/home/runner/work/repo/repo")
+    assert run_metrics.workspace_root() == "/github/workspace"
+
+
 def test_snapshot_handoffs(tmp_path):
     work = tmp_path / "work"
     work.mkdir()

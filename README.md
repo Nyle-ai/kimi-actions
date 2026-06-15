@@ -226,6 +226,7 @@ Every `/review` records **per-stage spend** (Planner / Executor / QA) and emits 
           with:
             name: ai-code-review-${{ github.event.pull_request.number || github.event.issue.number }}
             path: .kimi-review/
+            include-hidden-files: true   # .kimi-review/ is a dotfile dir; v4 skips hidden files otherwise
             if-no-files-found: ignore
             retention-days: 30
   ```

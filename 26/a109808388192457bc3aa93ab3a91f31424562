@@ -1,0 +1,42 @@
+tests/test_run_metrics.py
+  s_3f1755f0be85d5::t_251aeffd52e692 1-102
+.github/workflows/test-action.yml
+  s_3f1755f0be85d5::t_616467160bf2f3 12
+README.md
+  s_3f1755f0be85d5::t_10bb717639ff28 195-225
+  s_3f1755f0be85d5::t_13241cc5218307 128
+  s_3f1755f0be85d5::t_81deeeea58888b 168-173
+src/main.py
+  s_3f1755f0be85d5::t_65f9c10e804ad4 17-21
+.kimi-review/run-metadata.json
+  s_3f1755f0be85d5::t_d7d817b0de4f7c 1-21
+src/tools/reviewer.py
+  s_3f1755f0be85d5::t_8ae56ef367a37d 22
+  s_3f1755f0be85d5::t_64ca5600730a61 72,93-97,102-112
+src/tools/base.py
+  s_3f1755f0be85d5::t_2b4339f98c8426 330-332,334,349-352,354,362
+  s_3f1755f0be85d5::t_64969c4ff859eb 276-277
+  s_3f1755f0be85d5::t_eda294af9d11ef 78-83
+  s_3f1755f0be85d5::t_dfd75abdd9bead 290-309
+  s_3f1755f0be85d5::t_b71efae1935599 33-39
+  s_3f1755f0be85d5::t_87063ee43e5d34 239,241
+  s_3f1755f0be85d5::t_2a9b93eddcb4d0 17
+src/run_metrics.py
+  s_3f1755f0be85d5::t_88981ca2d8cc5d 1-290
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "26a109808388192457bc3aa93ab3a91f31424562",
+  "prompts": {},
+  "sessions": {
+    "s_3f1755f0be85d5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "752d3766-4fbf-4ade-8864-66f311683ceb",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Artur Kuzmin <artursregs@gmail.com>"
+    }
+  }
+}

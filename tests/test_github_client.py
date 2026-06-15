@@ -293,7 +293,73 @@ class TestGitHubClientCommits:
         client = GitHubClient("fake-token")
         last_comment = client.get_last_bot_comment("owner/repo", 123)
 
-        # Should find the bot comment with SHA
-        assert (
-            last_comment is not None or last_comment is None
-        )  # Implementation dependent
+        # Should find the bot comment with SHA via the marker regex.
+        assert last_comment is not None
+        assert last_comment["sha"] == "abc123"
+
+
+class TestGitHubClientReviewThreads:
+    """Tests for the GraphQL review-thread helpers."""
+
+    def test_get_bot_review_threads_filters_by_login(self, mock_github_api):
+        from github_client import GitHubClient
+
+        data = {
+            "repository": {
+                "pullRequest": {
+                    "reviewThreads": {
+                        "nodes": [
+                            {
+                                "id": "T1",
+                                "isResolved": False,
+                                "path": "a.py",
+                                "line": 5,
+                                "comments": {
+                                    "nodes": [{"author": {"login": "kimi-bot"}}]
+                                },
+                            },
+                            {
+                                "id": "T2",
+                                "isResolved": False,
+                                "path": "b.py",
+                                "line": 9,
+                                "comments": {
+                                    "nodes": [{"author": {"login": "human"}}]
+                                },
+                            },
+                        ]
+                    }
+                }
+            }
+        }
+        client = GitHubClient("fake-token")
+        with patch.object(client, "_graphql", return_value=data):
+            threads = client.get_bot_review_threads(
+                "owner/repo", 1, bot_login="kimi-bot"
+            )
+        assert len(threads) == 1
+        assert threads[0]["thread_id"] == "T1"
+        assert threads[0]["path"] == "a.py"
+
+    def test_resolve_review_thread(self, mock_github_api):
+        from github_client import GitHubClient
+
+        client = GitHubClient("fake-token")
+        with patch.object(
+            client,
+            "_graphql",
+            return_value={"resolveReviewThread": {"thread": {"id": "T1", "isResolved": True}}},
+        ):
+            assert client.resolve_review_thread("T1") is True
+
+    def test_graphql_handles_errors_gracefully(self, mock_github_api):
+        from github_client import GitHubClient
+
+        import urllib.error
+
+        client = GitHubClient("fake-token")
+        with patch(
+            "github_client.urllib.request.urlopen",
+            side_effect=urllib.error.URLError("boom"),
+        ):
+            assert client._graphql("query {}", {}) == {}

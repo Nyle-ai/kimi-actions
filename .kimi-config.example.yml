@@ -28,6 +28,9 @@ categories:
 # =============================================================================
 # Ignore Files
 # =============================================================================
+# Glob patterns excluded from the reviewed diff (in addition to the action's
+# built-in strip list for lockfiles / minified / generated assets).
+# Note: DB migrations are always reviewed and cannot be ignored here.
 ignore_files:
   - "*.test.ts"
   - "*.spec.ts"

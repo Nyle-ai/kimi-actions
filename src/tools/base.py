@@ -6,19 +6,50 @@ Provides common functionality for all tools:
 - Repository cloning
 """
 
+import asyncio
+import contextlib
 import logging
 import os
 import subprocess
+import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional, TypeVar
 
-from action_config import get_action_config
+from action_config import get_action_config, DEFAULT_MODEL, DEFAULT_BASE_URL
 from github_client import GitHubClient
 from skill_loader import SkillManager, Skill
 from repo_config import load_repo_config, RepoConfig
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
+
+# Reliability tuning (overridable via env for tests / large repos).
+AGENT_TIMEOUT_SECONDS = int(os.environ.get("KIMI_AGENT_TIMEOUT", "900"))
+RETRY_BACKOFF = [5, 10, 20, 30]
+HEARTBEAT_INTERVAL = 30
+
+
+def with_retry(
+    func: Callable[[], T],
+    *,
+    label: str = "github",
+    backoff=RETRY_BACKOFF,
+) -> T:
+    """Run a synchronous call with retry/backoff, re-raising the last error if all attempts fail."""
+    last_exc: Optional[Exception] = None
+    for attempt in range(len(backoff) + 1):
+        try:
+            return func()
+        except Exception as e:  # noqa: BLE001 - we re-raise below
+            last_exc = e
+            if attempt < len(backoff):
+                delay = backoff[attempt]
+                logger.warning(f"{label} call failed ({e}); retrying in {delay}s")
+                time.sleep(delay)
+    assert last_exc is not None
+    raise last_exc
 
 
 class BaseTool(ABC):
@@ -79,21 +110,17 @@ class BaseTool(ABC):
         """Generate standard footer for tool output."""
         model_info = f"`{self.agent_model}`"
 
-        footer = f"---\n<sub>Powered by [Kimi](https://kimi.moonshot.cn/) | Model: {model_info}"
+        footer = f"---\n<sub>Powered by [Kimi](https://kimi.com/) | Model: {model_info}"
         if extra_info:
             footer += f" | {extra_info}"
         footer += "</sub>"
 
         return footer
 
-    # Agent SDK configuration
-    AGENT_MODEL = "kimi-k2.6"  # Default; overridden by INPUT_MODEL via ActionConfig
-    AGENT_BASE_URL = "https://api.moonshot.cn/v1"
-
     @property
     def agent_model(self) -> str:
         """Resolve the model name from config (workflow input) with fallback."""
-        return getattr(self.config, "model", None) or self.AGENT_MODEL
+        return getattr(self.config, "model", None) or DEFAULT_MODEL
 
     def setup_agent_env(self) -> Optional[str]:
         """Setup environment variables for Agent SDK.
@@ -109,7 +136,7 @@ class BaseTool(ABC):
         base_url = (
             self.config.kimi_base_url
             or os.environ.get("KIMI_BASE_URL")
-            or self.AGENT_BASE_URL
+            or DEFAULT_BASE_URL
         )
 
         os.environ["KIMI_API_KEY"] = api_key
@@ -243,3 +270,49 @@ class BaseTool(ABC):
         except Exception as e:
             logger.error(f"Agent execution failed: {e}")
             return ""
+
+    async def _heartbeat(self, label: str) -> None:
+        """Emit a periodic log line so long agent runs don't look hung."""
+        elapsed = 0
+        while True:
+            await asyncio.sleep(HEARTBEAT_INTERVAL)
+            elapsed += HEARTBEAT_INTERVAL
+            logger.info(f"{label} still running ({elapsed}s elapsed)")
+
+    async def run_agent_reliably(
+        self,
+        work_dir: str,
+        prompt: str,
+        skills_dir: Optional[str] = None,
+        label: str = "agent",
+    ) -> str:
+        """Run an agent stage with a wall-clock timeout, heartbeat and retry/backoff.
+
+        Retries when the stage times out or returns no output. Returns "" if every attempt
+        fails so the caller can decide how to degrade.
+        """
+        for attempt in range(len(RETRY_BACKOFF) + 1):
+            hb = asyncio.create_task(self._heartbeat(label))
+            try:
+                result = await asyncio.wait_for(
+                    self.run_agent(work_dir, prompt, skills_dir),
+                    timeout=AGENT_TIMEOUT_SECONDS,
+                )
+            except asyncio.TimeoutError:
+                logger.warning(f"{label} timed out after {AGENT_TIMEOUT_SECONDS}s")
+                result = ""
+            finally:
+                hb.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await hb
+
+            if result.strip():
+                return result
+
+            if attempt < len(RETRY_BACKOFF):
+                delay = RETRY_BACKOFF[attempt]
+                logger.warning(f"{label} produced no output; retrying in {delay}s")
+                await asyncio.sleep(delay)
+
+        logger.error(f"{label} failed after {len(RETRY_BACKOFF) + 1} attempts")
+        return ""

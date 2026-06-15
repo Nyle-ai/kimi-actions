@@ -1,8 +1,11 @@
 """GitHub API client for PR operations."""
 
+import json
 import os
 import re
 import logging
+import urllib.error
+import urllib.request
 from typing import List, Dict, Optional, Set, Any
 
 from github import Github, GithubException
@@ -275,6 +278,100 @@ class GitHubClient:
 
         return line_map
 
+    # === Review threads (GraphQL) ===
+
+    def _graphql(self, query: str, variables: Dict[str, Any]) -> Dict[str, Any]:
+        """Run a GraphQL query against the GitHub API using the configured token.
+
+        Uses stdlib urllib to avoid an extra dependency. Returns the parsed ``data``
+        object, or ``{}`` on any error (auto-resolve is best-effort, never fatal).
+        """
+        payload = json.dumps({"query": query, "variables": variables}).encode("utf-8")
+        req = urllib.request.Request(
+            "https://api.github.com/graphql",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json",
+                "User-Agent": "kimi-actions",
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                body = json.loads(resp.read().decode("utf-8"))
+            if body.get("errors"):
+                logger.warning(f"GraphQL errors: {body['errors']}")
+            return body.get("data") or {}
+        except (urllib.error.URLError, ValueError, TimeoutError) as e:
+            logger.warning(f"GraphQL request failed: {e}")
+            return {}
+
+    def get_bot_review_threads(
+        self, repo_name: str, pr_number: int, bot_login: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Get review threads authored by the bot.
+
+        Returns a list of dicts: {thread_id, path, line, is_resolved, author}.
+        ``bot_login`` (e.g. "github-actions[bot]") filters to the bot's own threads; when
+        None, all threads are returned and the caller filters.
+        """
+        owner, _, name = repo_name.partition("/")
+        query = """
+        query($owner:String!,$name:String!,$number:Int!){
+          repository(owner:$owner,name:$name){
+            pullRequest(number:$number){
+              reviewThreads(first:100){
+                nodes{
+                  id isResolved path line
+                  comments(first:1){ nodes{ author{ login } } }
+                }
+              }
+            }
+          }
+        }
+        """
+        data = self._graphql(
+            query, {"owner": owner, "name": name, "number": pr_number}
+        )
+        threads: List[Dict[str, Any]] = []
+        try:
+            nodes = data["repository"]["pullRequest"]["reviewThreads"]["nodes"]
+        except (KeyError, TypeError):
+            return threads
+
+        for node in nodes:
+            comments = (node.get("comments") or {}).get("nodes") or []
+            author = (
+                comments[0]["author"]["login"]
+                if comments and comments[0].get("author")
+                else None
+            )
+            if bot_login and author != bot_login:
+                continue
+            threads.append(
+                {
+                    "thread_id": node["id"],
+                    "path": node.get("path"),
+                    "line": node.get("line"),
+                    "is_resolved": node.get("isResolved", False),
+                    "author": author,
+                }
+            )
+        return threads
+
+    def resolve_review_thread(self, thread_id: str) -> bool:
+        """Resolve a review thread by node id. Returns True on success."""
+        mutation = """
+        mutation($id:ID!){
+          resolveReviewThread(input:{threadId:$id}){ thread{ id isResolved } }
+        }
+        """
+        data = self._graphql(mutation, {"id": thread_id})
+        resolved = bool(data.get("resolveReviewThread"))
+        if resolved:
+            logger.info(f"Resolved review thread {thread_id}")
+        return resolved
+
     # === Labels ===
 
     def add_labels(self, repo_name: str, pr_number: int, labels: List[str]) -> None:
@@ -345,9 +442,12 @@ class GitHubClient:
         return "\n\n".join(diff_parts)
 
     def get_last_bot_comment(
-        self, repo_name: str, pr_number: int, bot_marker: str = "<!-- kimi-review -->"
+        self, repo_name: str, pr_number: int
     ) -> Optional[Dict[str, Any]]:
-        """Find the last comment from this bot with review marker.
+        """Find the last comment from this bot carrying a review SHA marker.
+
+        The marker is written as ``<!-- kimi-review:sha=abc123 -->``; we match it directly
+        rather than requiring a separate substring (the old default never matched).
 
         Returns dict with 'sha' and 'comment_id' if found.
         """
@@ -355,17 +455,15 @@ class GitHubClient:
         comments = list(pr.get_issue_comments())
 
         for comment in reversed(comments):
-            if bot_marker in comment.body:
-                # Extract SHA from marker: <!-- kimi-review:sha=abc123 -->
-                sha_match = re.search(
-                    r"<!-- kimi-review:sha=([a-f0-9]+) -->", comment.body
-                )
-                if sha_match:
-                    return {
-                        "sha": sha_match.group(1),
-                        "comment_id": comment.id,
-                        "created_at": comment.created_at,
-                    }
+            sha_match = re.search(
+                r"<!-- kimi-review:sha=([a-f0-9]+) -->", comment.body
+            )
+            if sha_match:
+                return {
+                    "sha": sha_match.group(1),
+                    "comment_id": comment.id,
+                    "created_at": comment.created_at,
+                }
         return None
 
     # === Issue Operations ===

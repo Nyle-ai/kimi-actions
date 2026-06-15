@@ -12,12 +12,18 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 class MockPR:
     """Mock GitHub PR object."""
 
-    def __init__(self):
+    def __init__(self, files=None):
         self.title = "feat: add user authentication"
         self.body = "This PR adds JWT authentication"
         self.number = 42
         self.head = Mock(sha="abc123", ref="feature/auth")
         self.base = Mock(ref="main")
+        self._files = files if files is not None else [
+            Mock(filename="src/auth.py", patch="@@ -0,0 +1,2 @@\n+import jwt\n+x = 1")
+        ]
+
+    def get_files(self):
+        return self._files
 
     def get_commits(self):
         commit = Mock()
@@ -94,6 +100,8 @@ def mock_action_config():
             extra_instructions="",
         )
         config.improve = Mock(num_suggestions=5, extra_instructions="")
+        config.enable_inline_comments = False
+        config.enable_auto_resolve = False
         mock.return_value = config
         yield config
 
@@ -114,47 +122,46 @@ class TestReviewerIntegration:
         reviewer.repo_config = None
         reviewer.skill_manager = Mock()
         reviewer.skill_manager.get_skill = Mock(
-            return_value=Mock(instructions="Review the code", scripts={})
+            return_value=Mock(instructions="Review the code", scripts={}, path=None)
         )
 
-        # Mock subprocess and asyncio.run to skip git clone and agent calls
-        mock_agent_response = """```yaml
-summary: Code adds JWT authentication with some security concerns.
-score: 72
-suggestions:
-  - relevant_file: src/auth.py
-    language: python
-    one_sentence_summary: Hardcoded secret key is a security risk
-    suggestion_content: The JWT secret should be loaded from environment variables.
-    existing_code: 'token = jwt.encode({"user_id": user_id}, "secret")'
-    improved_code: 'token = jwt.encode({"user_id": user_id}, os.environ["JWT_SECRET"])'
-    relevant_lines_start: 6
-    relevant_lines_end: 6
-    label: security
-    severity: critical
-```"""
+        # The pipeline (asyncio.run) returns the QA-validated review dict.
+        qa_result = {
+            "issues": [
+                {
+                    "path": "src/auth.py",
+                    "line": 6,
+                    "severity": "critical",
+                    "category": "security",
+                    "title": "Hardcoded secret key",
+                    "body": "Load the JWT secret from the environment.",
+                }
+            ],
+            "verdict": "comment",
+            "summary": "Adds JWT auth; one security concern.",
+        }
         with (
             patch("subprocess.run") as mock_run,
-            patch("asyncio.run", return_value=mock_agent_response),
+            patch("asyncio.run", return_value=qa_result),
         ):
             mock_run.return_value = Mock(returncode=0)
             result = reviewer.run("owner/repo", 42)
 
-        # Now returns Markdown directly, not YAML
-        assert "Pull request overview" in result or "Kimi" in result
+        assert "Pull Request Overview" in result
+        assert "Hardcoded secret key" in result
 
     def test_review_handles_empty_diff(self, mock_action_config):
         """Test reviewer handles empty diff gracefully."""
         from tools.reviewer import Reviewer
 
         github = MockGitHubClient()
-        github.get_pr_diff = Mock(return_value="")
+        github.get_pr = Mock(return_value=MockPR(files=[]))
 
         reviewer = Reviewer(github)
         reviewer.load_context = Mock()
         reviewer.skill_manager = Mock()
         reviewer.skill_manager.get_skill = Mock(
-            return_value=Mock(instructions="Review the code", scripts={})
+            return_value=Mock(instructions="Review the code", scripts={}, path=None)
         )
 
         result = reviewer.run("owner/repo", 42)

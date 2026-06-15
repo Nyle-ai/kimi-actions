@@ -305,7 +305,7 @@ def get_help_message() -> str:
 
 | Command | Description |
 |---------|-------------|
-| `/review` | Smart code review (auto-detects incremental) |
+| `/review` | Three-agent code review (Planner → Executor → QA) with inline suggestions |
 | `/ask <question>` | Q&A about the PR or specific code |
 | `/help` | Show this help message |
 
@@ -323,18 +323,19 @@ def get_help_message() -> str:
 /ask Why is this approach used here?
 ```
 
-### Smart Incremental Review
+### How `/review` works
 
-The `/review` command automatically detects the best review strategy:
-- **First review**: Full review of all changes
-- **Subsequent reviews**: Only reviews new commits since last review
-- **Old reviews (>7 days)**: Automatically does full re-review
-- **No new commits**: Shows "no changes" message
+The reviewer runs three focused passes and posts findings as **inline review comments**
+(with one-click `suggestion` fixes) plus a verdict summary:
+- **Planner** drafts candidate issues from the filtered diff.
+- **Executor** verifies each against the code and writes the fix.
+- **QA** drops false positives and noise, keeping only high-confidence findings.
 
-No parameters needed - it just works!
+Re-running `/review` on a fixed commit auto-resolves threads that no longer apply, and
+skips work entirely when nothing changed since the last review.
 
 ---
-<sub>Powered by [Kimi](https://kimi.moonshot.cn/) with Agent SDK</sub>
+<sub>Powered by [Kimi](https://kimi.com/) with Agent SDK</sub>
 """
 
 

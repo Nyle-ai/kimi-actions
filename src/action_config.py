@@ -13,6 +13,12 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict
 
+# Single source of truth for model / endpoint defaults.
+# Compliant pay-go defaults; repos using the Kimi Code subscription override these
+# via the kimi_base_url / model inputs (e.g. https://api.kimi.com/coding/v1 + kimi-for-coding).
+DEFAULT_MODEL = "kimi-k2.7-code"
+DEFAULT_BASE_URL = "https://api.moonshot.ai/v1"
+
 
 @dataclass
 class ReviewConfig:
@@ -54,15 +60,19 @@ class ActionConfig:
 
     # API settings
     kimi_api_key: str = ""
-    kimi_base_url: str = "https://api.moonshot.cn/v1"
+    kimi_base_url: str = DEFAULT_BASE_URL
     github_token: str = ""
-    model: str = "kimi-k2.5"  # Default to k2.5 for best performance
+    model: str = DEFAULT_MODEL
 
     # General settings
     language: str = "en-US"  # zh-CN or en-US
     review_level: str = "normal"  # strict, normal, gentle
     max_files: int = 50
     max_tokens: int = 100000
+
+    # Posting behaviour
+    enable_inline_comments: bool = True
+    enable_auto_resolve: bool = True
 
     # File filtering
     exclude_patterns: List[str] = field(
@@ -102,16 +112,22 @@ class ActionConfig:
 
         # API keys (from GitHub Actions inputs)
         config.kimi_api_key = os.environ.get("INPUT_KIMI_API_KEY", "")
-        config.kimi_base_url = os.environ.get(
-            "INPUT_KIMI_BASE_URL", "https://api.moonshot.cn/v1"
-        )
+        config.kimi_base_url = os.environ.get("INPUT_KIMI_BASE_URL", DEFAULT_BASE_URL)
         config.github_token = os.environ.get("INPUT_GITHUB_TOKEN", "")
 
         # General settings
         config.language = os.environ.get("INPUT_LANGUAGE", "en-US")
-        config.model = os.environ.get("INPUT_MODEL", "kimi-k2.5")
+        config.model = os.environ.get("INPUT_MODEL", DEFAULT_MODEL)
         config.review_level = os.environ.get("INPUT_REVIEW_LEVEL", "normal")
         config.max_files = int(os.environ.get("INPUT_MAX_FILES", "50"))
+
+        # Posting behaviour
+        config.enable_inline_comments = (
+            os.environ.get("INPUT_ENABLE_INLINE_COMMENTS", "true").lower() == "true"
+        )
+        config.enable_auto_resolve = (
+            os.environ.get("INPUT_ENABLE_AUTO_RESOLVE", "true").lower() == "true"
+        )
 
         # Exclude patterns
         exclude_str = os.environ.get("INPUT_EXCLUDE_PATTERNS", "")

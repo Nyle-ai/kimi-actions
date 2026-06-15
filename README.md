@@ -52,7 +52,7 @@
 │         ▼                                         ▼                │
 │  ┌──────────────────┐                   ┌──────────────────┐       │
 │  │  Kimi Agent SDK  │                   │   GitHub API     │       │
-│  │   (kimi-k2.5)    │                   │     (REST)       │       │
+│  │ (kimi-k2.7-code) │                   │     (REST)       │       │
 │  │                  │                   │                  │       │
 │  │ • Auto token mgmt│                   │ • Get PR diff    │       │
 │  │ • Script exec    │                   │ • Post comments  │       │
@@ -63,15 +63,32 @@
 └────────────────────────────────────────────────────────────────────┘
 ```
 
+### `/review` pipeline
+
+`Reviewer.run()` filters and sanitizes the diff, clones the repo, then runs three Agent SDK
+sessions that hand off via JSON files on disk:
+
+```
+filter + sanitize diff → clone
+  → Planner   → review-plan.json           (candidate issues)
+  → Executor  → review-draft.json          (verified + suggestion fixes)
+  → QA        → qa-validated-review.json    (false-positives/noise removed)
+  → POSTER (pure Python): inline comments + verdict summary + auto-resolve fixed threads
+```
+
+Each stage has a timeout, heartbeat and retry/backoff; an empty Planner result short-circuits to
+an approval.
+
 ## Features
 
-- 🔍 `/review` - Comprehensive code review of all PR changes
+- 🔍 `/review` - **Three-agent review** (Planner → Executor → QA) for high signal, low noise
 - 💬 `/ask` - Interactive Q&A about the PR or specific code
+- 💡 **Inline suggestions** - Findings posted on the exact line with one-click `suggestion` fixes
+- ♻️ **Auto-resolve** - Threads for fixed issues resolve themselves on the next review
+- 🧹 **Diff filtering** - Lockfiles, minified bundles and generated assets are dropped (migrations kept)
+- 🛡️ **Prompt-injection defense** - Untrusted PR content is sanitized and fenced before it reaches the model
 - 🧠 **Agent Skills** - Modular capability extension with custom review rules
-- 🌐 Multi-language support (English/Chinese)
-- ⚙️ Configurable review strictness
-- 🎯 **Direct Markdown Output** - Clean, readable reviews powered by Agent SDK
-- 🚀 **Simplified Architecture** - Agent SDK handles all context and token management
+- ⚙️ Configurable review strictness and category toggles
 
 ## Quick Start
 
@@ -89,7 +106,7 @@
 2. Click `Settings` → `Secrets and variables` → `Actions`
 3. Click `New repository secret`
 4. Add `KIMI_API_KEY` with the API Key from step 1
-5. (Optional) Add `KIMI_BASE_URL` if using a custom API endpoint (defaults to `https://api.moonshot.cn/v1`)
+5. (Optional) Add `KIMI_BASE_URL` if using a custom API endpoint (defaults to `https://api.moonshot.ai/v1`)
 
 ### 3. Create Workflow File
 
@@ -180,14 +197,30 @@ Use these commands in PR comments:
     github_token: ${{ secrets.GITHUB_TOKEN }}
     
     # Optional
-    kimi_base_url: ${{ secrets.KIMI_BASE_URL }}  # Custom API endpoint (optional, defaults to https://api.moonshot.cn/v1)
+    kimi_base_url: ${{ secrets.KIMI_BASE_URL }}  # API endpoint (default: https://api.moonshot.ai/v1)
     language: 'en-US'               # Response language: zh-CN, en-US
-    model: 'kimi-k2.5'              # Kimi model (default: kimi-k2.5)
+    model: 'kimi-k2.7-code'         # Kimi model (default: kimi-k2.7-code)
     review_level: 'normal'          # Review strictness: strict, normal, gentle
     max_files: '50'                 # Max files to review
-    exclude_patterns: '*.lock,*.min.js'  # File patterns to exclude
+    exclude_patterns: '*.lock,*.min.js'  # Extra file patterns to exclude from the diff
     auto_review: 'false'            # Auto review on PR open (default: false, use /review command instead)
+    enable_inline_comments: 'true'  # Post findings as inline review comments with suggestions
+    enable_auto_resolve: 'true'     # Auto-resolve fixed threads on re-review
 ```
+
+### API endpoint & model
+
+The action defaults to the **compliant pay-go** endpoint `https://api.moonshot.ai/v1` with model
+`kimi-k2.7-code` (~$0.05/review). To run on the **Kimi Code subscription** instead, set per-repo
+secrets and pass them through:
+
+```yaml
+    kimi_base_url: 'https://api.kimi.com/coding/v1'
+    model: 'kimi-for-coding'
+```
+
+> ⚠️ The Kimi Code subscription is for personal interactive use; non-interactive/CI use may violate its
+> Terms of Service. The pay-go default above avoids this — switch only if you accept the risk.
 
 ### Repository Config (.kimi-config.yml)
 
@@ -256,15 +289,14 @@ Skills are automatically triggered based on PR code content.
 
 ## Models
 
-| Model | Context | Notes |
-|-------|---------|-------|
-| `kimi-k2.5` | 256K | **Default**, latest model with best performance |
-| `kimi-k2-thinking-turbo` | 256K | Faster thinking model |
-| `kimi-k2-thinking` | 256K | More thorough reasoning, slower |
+| Model | Endpoint | Notes |
+|-------|----------|-------|
+| `kimi-k2.7-code` | `https://api.moonshot.ai/v1` | **Default** (pay-go), thinking always-on |
+| `kimi-for-coding` | `https://api.kimi.com/coding/v1` | Kimi Code subscription (server-maps to K2.7 Code; see ToS note above) |
 
-All commands use **Kimi Agent SDK** with `kimi-k2.5` model by default.
+All commands use the **Kimi Agent SDK** with `kimi-k2.7-code` by default.
 
-The Agent SDK automatically handles large PRs with its 256K context window.
+The Agent SDK automatically handles large PRs with its large context window.
 
 ## Review Categories
 
@@ -375,13 +407,19 @@ Then use it in your workflow:
     github_token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-**Note:** If `KIMI_BASE_URL` is not set, it defaults to `https://api.moonshot.cn/v1`.
+**Note:** If `KIMI_BASE_URL` is not set, it defaults to `https://api.moonshot.ai/v1`.
 
 This is useful for:
 - Using a corporate proxy
 - Testing with a local development server
 - Using alternative API gateways
 - Keeping endpoint URLs private
+
+## Roadmap
+
+- **Ticket context** (ClickUp / Linear) — inject the linked ticket's intent so the reviewer can check
+  code against requirements.
+- **PR overview** — a one-shot summary comment with a mermaid diagram on PR open.
 
 ## Acknowledgments
 

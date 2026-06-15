@@ -1,4 +1,4 @@
-# Kimi Code Review Action
+# AI Code Review Action
 
 🌗 AI-powered code review using [Kimi](https://kimi.moonshot.cn/) (Moonshot AI)
 
@@ -111,8 +111,8 @@ an approval.
 ### 3. Create Workflow File
 
 ```yaml
-# .github/workflows/kimi-review.yml
-name: Kimi Code Review
+# .github/workflows/ai-code-review.yml
+name: AI Code Review
 
 on:
   pull_request:
@@ -130,7 +130,7 @@ permissions:
   issues: write        # add the 👀 ack reaction to /review and /ask comments (see note below)
 
 jobs:
-  kimi-review:
+  ai-code-review:
     runs-on: ubuntu-latest
     if: |
       github.event_name == 'pull_request' ||
@@ -220,11 +220,11 @@ Every `/review` records **per-stage spend** (Planner / Executor / QA) and emits 
   `.kimi-review/` in the workspace. Add an upload step to keep them for later analysis:
 
   ```yaml
-        - name: Upload Kimi review trajectory
+        - name: Upload AI Code Review trajectory
           if: always()
-          uses: actions/upload-artifact@v7
+          uses: actions/upload-artifact@v4
           with:
-            name: kimi-review-${{ github.event.pull_request.number || github.event.issue.number }}
+            name: ai-code-review-${{ github.event.pull_request.number || github.event.issue.number }}
             path: .kimi-review/
             if-no-files-found: ignore
             retention-days: 30

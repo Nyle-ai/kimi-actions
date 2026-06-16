@@ -1,0 +1,20 @@
+src/main.py
+  s_e68ffc419c3aed::t_7013fd6c267ffd 262-266,271-272
+  s_e68ffc419c3aed::t_db75b908c77205 28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "2714d6ce079a883379ce4b9422269b723ba4ab39",
+  "prompts": {},
+  "sessions": {
+    "s_e68ffc419c3aed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9f857c26-437c-4bd1-8db6-5d9452ef4e28",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Artur Kuzmin <artursregs@gmail.com>"
+    }
+  }
+}

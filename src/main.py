@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 # single, fresh notice). Distinct from the review summary's ``kimi-review:sha=...`` marker,
 # so deleting skip notices never removes the original review.
 DRAFT_SKIP_MARKER = "<!-- kimi-review:draft-skip -->"
+IN_PROGRESS_MARKER = "<!-- kimi-review:in-progress -->"
 
 
 def _draft_skip_notice() -> str:
@@ -258,9 +259,17 @@ def handle_comment_event(event: dict, config: ActionConfig):
 
     try:
         if command == "review":
+            github.post_comment(
+                repo_name,
+                pr_number,
+                f"> /review\n\n🔍 **Review in progress** — Planner → Executor → QA running. I'll post results here when done.\n\n{IN_PROGRESS_MARKER}",
+            )
             reviewer = Reviewer(github)
             result = reviewer.run(
                 repo_name, pr_number, command_quote="/review"
+            )
+            github.delete_issue_comments_with_marker(
+                repo_name, pr_number, IN_PROGRESS_MARKER
             )
             if result:
                 github.post_comment(repo_name, pr_number, result)

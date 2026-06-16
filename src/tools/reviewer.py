@@ -72,7 +72,7 @@ class Reviewer(BaseTool):
         metrics_out = run_metrics.metrics_dir()
         with tempfile.TemporaryDirectory() as work_dir:
             logger.info(f"Cloning {repo_name} (branch: {pr.head.ref}) to {work_dir}")
-            if not self.clone_repo(repo_name, work_dir, branch=pr.head.ref):
+            if not self.clone_repo(repo_name, work_dir, branch=pr.head.ref, sha=pr.head.sha):
                 return self._error_comment("Failed to clone repository")
 
             try:

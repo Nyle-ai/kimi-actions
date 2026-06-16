@@ -66,5 +66,32 @@ outputs:
     description: 'The review comment posted to the PR'
 
 runs:
-  using: 'docker'
-  image: 'Dockerfile'
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      shell: bash
+      run: pip install --no-cache-dir -r "${{ github.action_path }}/requirements.txt"
+
+    - name: Run AI Code Review
+      shell: bash
+      run: python "${{ github.action_path }}/src/main.py"
+      env:
+        INPUT_KIMI_API_KEY: ${{ inputs.kimi_api_key }}
+        INPUT_KIMI_BASE_URL: ${{ inputs.kimi_base_url }}
+        INPUT_GITHUB_TOKEN: ${{ inputs.github_token }}
+        INPUT_LANGUAGE: ${{ inputs.language }}
+        INPUT_MODEL: ${{ inputs.model }}
+        INPUT_REVIEW_LEVEL: ${{ inputs.review_level }}
+        INPUT_MAX_FILES: ${{ inputs.max_files }}
+        INPUT_EXCLUDE_PATTERNS: ${{ inputs.exclude_patterns }}
+        INPUT_AUTO_REVIEW: ${{ inputs.auto_review }}
+        INPUT_ENABLE_INLINE_COMMENTS: ${{ inputs.enable_inline_comments }}
+        INPUT_ENABLE_AUTO_RESOLVE: ${{ inputs.enable_auto_resolve }}
+        INPUT_CLICKUP_TOKEN: ${{ inputs.clickup_token }}
+        INPUT_CLICKUP_TEAM_ID: ${{ inputs.clickup_team_id }}
+        INPUT_LINEAR_API_KEY: ${{ inputs.linear_api_key }}

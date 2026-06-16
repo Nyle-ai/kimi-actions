@@ -153,13 +153,16 @@ class BaseTool(ABC):
         os.environ["KIMI_MODEL_NAME"] = self.agent_model
         return api_key
 
-    def clone_repo(self, repo_name: str, work_dir: str, branch: str = None) -> bool:
+    def clone_repo(
+        self, repo_name: str, work_dir: str, branch: str = None, sha: str = None
+    ) -> bool:
         """Clone repository with fallback logic.
 
         Args:
             repo_name: Repository name (owner/repo)
             work_dir: Directory to clone into
-            branch: Branch name (optional, falls back to default branch)
+            branch: Branch name (optional)
+            sha: Commit SHA to check out (used as fallback when branch is deleted/missing)
 
         Returns:
             True if clone succeeded, False otherwise
@@ -188,8 +191,34 @@ class BaseTool(ABC):
             logger.info(f"Successfully cloned {repo_name}")
             return True
         except subprocess.CalledProcessError as e:
-            if branch:
-                # Fallback to default branch
+            if branch and sha:
+                # Branch was deleted (e.g. merged PR) — fetch by SHA from default branch
+                logger.warning(
+                    f"Failed to clone branch {branch} (deleted?); falling back to SHA {sha[:12]}"
+                )
+                try:
+                    subprocess.run(
+                        ["git", "clone", "--no-tags", clone_url, work_dir],
+                        check=True,
+                        capture_output=True,
+                    )
+                    subprocess.run(
+                        ["git", "-C", work_dir, "fetch", "--depth", "1", "origin", sha],
+                        check=True,
+                        capture_output=True,
+                    )
+                    subprocess.run(
+                        ["git", "-C", work_dir, "checkout", sha],
+                        check=True,
+                        capture_output=True,
+                    )
+                    logger.info(f"Successfully checked out {repo_name} @ {sha[:12]}")
+                    return True
+                except subprocess.CalledProcessError:
+                    logger.error(f"Failed to clone {repo_name} by SHA: {e}")
+                    return False
+            elif branch:
+                # No SHA — fall back to default branch as before
                 logger.warning(
                     f"Failed to clone branch {branch}, trying default branch"
                 )

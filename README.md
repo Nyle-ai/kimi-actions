@@ -157,7 +157,7 @@ jobs:
 
       - uses: actions/checkout@v6
         with:
-          ref: ${{ (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment') && steps.get-pr.outputs.ref || github.head_ref }}
+          ref: ${{ (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment') && steps.get-pr.outputs.sha || github.sha }}
 
       - uses: xiaoju111a/kimi-actions@main
         with:

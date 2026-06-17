@@ -222,7 +222,7 @@ Every `/review` records **per-stage spend** (Planner / Executor / QA) and emits 
   ```yaml
         - name: Upload AI Code Review trajectory
           if: always()
-          uses: actions/upload-artifact@v4
+          uses: actions/upload-artifact@v7
           with:
             name: ai-code-review-${{ github.event.pull_request.number || github.event.issue.number }}
             path: .kimi-review/

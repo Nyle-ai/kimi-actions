@@ -1,0 +1,19 @@
+src/tools/reviewer.py
+  s_e68ffc419c3aed::t_07e9be7c405640 432
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "ad723eac07d63a250038f5a313b11be59afde08c",
+  "prompts": {},
+  "sessions": {
+    "s_e68ffc419c3aed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9f857c26-437c-4bd1-8db6-5d9452ef4e28",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Artur Kuzmin <artursregs@gmail.com>"
+    }
+  }
+}

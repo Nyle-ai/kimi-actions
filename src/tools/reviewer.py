@@ -429,7 +429,7 @@ class Reviewer(BaseTool):
         verdict = "✅ No blocking issues found." if not issues else (
             f"Found {len(issues)} issue(s)."
         )
-        body = f"## 🌗 Kimi Review\n\n{verdict}"
+        body = f"## 🌗 Lana Review\n\n{verdict}"
         if overflow:
             body += "\n\n### Additional Review Comments\n"
             for issue in overflow:

@@ -30,6 +30,17 @@ AGENT_TIMEOUT_SECONDS = int(os.environ.get("KIMI_AGENT_TIMEOUT", "900"))
 RETRY_BACKOFF = [5, 10, 20, 30]
 HEARTBEAT_INTERVAL = 30
 
+# Default per-turn agent step cap (mirrors the historical hardcoded value so the
+# default behaviour is unchanged; callers can scale it via run_agent(max_steps=...)).
+DEFAULT_MAX_STEPS_PER_TURN = 100
+
+# An immediate failure (the SDK never made a call AND an error was captured — e.g.
+# auth/outage) won't heal in a few seconds, so don't burn the whole retry budget on it.
+MAX_IMMEDIATE_FAILURE_ATTEMPTS = 2
+# A timeout has already spent ~AGENT_TIMEOUT_SECONDS of wall-clock; allow at most this
+# many further attempts rather than retrying to the full RETRY_BACKOFF count.
+MAX_RETRIES_AFTER_TIMEOUT = 1
+
 # Token usage fields carried by kosong's TokenUsage (cache-aware).
 _USAGE_FIELDS = ("input_other", "input_cache_read", "input_cache_creation", "output")
 
@@ -80,6 +91,9 @@ class BaseTool(ABC):
         # (incl. retries) up into stage_metrics for the run summary.
         self.stage_metrics: List[Dict[str, Any]] = []
         self._last_usage: Dict[str, int] = _zero_usage()
+        # Most recent run_agent failure (repr of the exception or a short reason).
+        # Empty string means the last run_agent call did not record an error.
+        self._last_error: str = ""
 
     @property
     @abstractmethod
@@ -249,7 +263,11 @@ class BaseTool(ABC):
         return None
 
     async def run_agent(
-        self, work_dir: str, prompt: str, skills_dir: Optional[str] = None
+        self,
+        work_dir: str,
+        prompt: str,
+        skills_dir: Optional[str] = None,
+        max_steps: int = DEFAULT_MAX_STEPS_PER_TURN,
     ) -> str:
         """Run agent with standard configuration.
 
@@ -257,21 +275,26 @@ class BaseTool(ABC):
             work_dir: Working directory for agent
             prompt: Prompt to send to agent
             skills_dir: Optional path to skills directory. If None, auto-detects from current skill.
+            max_steps: Per-turn step cap passed to the SDK session (defaults to the
+                historical value so behaviour is unchanged; callers can scale it).
 
         Returns:
             Agent response text
         """
         self._last_usage = _zero_usage()
+        self._last_error = ""
         try:
             from kimi_agent_sdk import Session, ApprovalRequest, TextPart, StatusUpdate
             from kaos.path import KaosPath
-        except ImportError:
-            logger.error("kimi-agent-sdk not installed")
+        except Exception as e:  # noqa: BLE001 - a missing or import-incompatible SDK must degrade gracefully
+            logger.error(f"kimi-agent-sdk unavailable: {e}")
+            self._last_error = repr(e)
             return ""
 
         api_key = self.setup_agent_env()
         if not api_key:
             logger.error("KIMI_API_KEY not found")
+            self._last_error = "KIMI_API_KEY not found"
             return ""
 
         # Auto-detect skills_dir from current skill if not provided
@@ -290,7 +313,7 @@ class BaseTool(ABC):
                 work_dir=work_dir_kaos,
                 model=self.agent_model,
                 yolo=True,
-                max_steps_per_turn=100,
+                max_steps_per_turn=max_steps,
                 skills_dir=skills_dir_kaos,
             ) as session:
                 async for msg in session.prompt(prompt):
@@ -310,6 +333,7 @@ class BaseTool(ABC):
             return response
         except Exception as e:
             logger.error(f"Agent execution failed: {e}")
+            self._last_error = repr(e)
             return ""
 
     def _accumulate_usage(self, token_usage: Any) -> None:
@@ -330,6 +354,10 @@ class BaseTool(ABC):
             "attempts": attempts,
         }
         row.update(usage)
+        # Surface the last failure so run-metadata stages carry it (previously the
+        # underlying error was swallowed and never reached the trajectory record).
+        if self._last_error:
+            row["error"] = self._last_error
         self.stage_metrics.append(row)
 
     async def _heartbeat(self, label: str) -> None:
@@ -346,26 +374,40 @@ class BaseTool(ABC):
         prompt: str,
         skills_dir: Optional[str] = None,
         label: str = "agent",
+        max_steps: int = DEFAULT_MAX_STEPS_PER_TURN,
     ) -> str:
         """Run an agent stage with a wall-clock timeout, heartbeat and retry/backoff.
 
         Retries when the stage times out or returns no output. Returns "" if every attempt
         fails so the caller can decide how to degrade.
+
+        Two failure modes short-circuit the full retry budget:
+        - Immediate failure (no SDK calls + a captured error, e.g. auth/outage): capped at
+          ``MAX_IMMEDIATE_FAILURE_ATTEMPTS`` since such errors won't heal in seconds.
+        - Timeout: each timeout already burned ~``AGENT_TIMEOUT_SECONDS`` of wall-clock, so
+          only ``MAX_RETRIES_AFTER_TIMEOUT`` further attempts are allowed.
+
+        Args:
+            max_steps: Per-turn step cap forwarded to ``run_agent`` (default unchanged).
         """
         stage_start = time.monotonic()
         stage_usage = _zero_usage()
         attempts_used = 0
+        # Remaining attempts permitted once a timeout has occurred (None until the first).
+        post_timeout_budget: Optional[int] = None
         for attempt in range(len(RETRY_BACKOFF) + 1):
             attempts_used += 1
+            timed_out = False
             hb = asyncio.create_task(self._heartbeat(label))
             try:
                 result = await asyncio.wait_for(
-                    self.run_agent(work_dir, prompt, skills_dir),
+                    self.run_agent(work_dir, prompt, skills_dir, max_steps),
                     timeout=AGENT_TIMEOUT_SECONDS,
                 )
             except asyncio.TimeoutError:
                 logger.warning(f"{label} timed out after {AGENT_TIMEOUT_SECONDS}s")
                 result = ""
+                timed_out = True
             finally:
                 hb.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
@@ -379,11 +421,36 @@ class BaseTool(ABC):
                 self._record_stage(label, stage_start, stage_usage, attempts_used)
                 return result
 
+            # F3: an immediate failure (the SDK never made a call and an error was
+            # captured) won't recover in a few seconds — stop after a couple of tries.
+            immediate_failure = (
+                self._last_usage.get("calls", 0) == 0 and bool(self._last_error)
+            )
+            if immediate_failure and attempts_used >= MAX_IMMEDIATE_FAILURE_ATTEMPTS:
+                logger.error(
+                    f"{label} failed immediately ({self._last_error}); "
+                    f"aborting after {attempts_used} attempt(s)"
+                )
+                break
+
+            # #3: a timeout has already spent the full wall-clock budget; allow only a
+            # limited number of further attempts instead of retrying to the full count.
+            if timed_out and post_timeout_budget is None:
+                post_timeout_budget = MAX_RETRIES_AFTER_TIMEOUT
+            if post_timeout_budget is not None:
+                if post_timeout_budget <= 0:
+                    logger.error(
+                        f"{label} timed out repeatedly; "
+                        f"aborting after {attempts_used} attempt(s)"
+                    )
+                    break
+                post_timeout_budget -= 1
+
             if attempt < len(RETRY_BACKOFF):
                 delay = RETRY_BACKOFF[attempt]
                 logger.warning(f"{label} produced no output; retrying in {delay}s")
                 await asyncio.sleep(delay)
 
         self._record_stage(label, stage_start, stage_usage, attempts_used)
-        logger.error(f"{label} failed after {len(RETRY_BACKOFF) + 1} attempts")
+        logger.error(f"{label} failed after {attempts_used} attempt(s)")
         return ""

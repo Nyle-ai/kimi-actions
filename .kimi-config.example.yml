@@ -26,6 +26,15 @@ categories:
 # Built-in skill names: code-review, describe, improve, ask
 
 # =============================================================================
+# Project Rules
+# =============================================================================
+# The reviewer deterministically loads top-level guidance files (CLAUDE.md,
+# AGENTS.md, CODE_REVIEW.md) plus matching .claude/rules/*.md files based on
+# changed paths and risk tags. Use these files for path-specific invariants such
+# as API route validation, queue idempotency, Supabase/RLS rules, or financial
+# totals parity.
+
+# =============================================================================
 # Ignore Files
 # =============================================================================
 # Glob patterns excluded from the reviewed diff (in addition to the action's

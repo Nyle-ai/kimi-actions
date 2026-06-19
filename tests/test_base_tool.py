@@ -211,11 +211,12 @@ class TestBaseToolRunAgent:
         tool = ConcreteTool.create(github)
 
         with patch.dict(os.environ, {"KIMI_API_KEY": "test-key"}):
-            # Skip this test if kimi_agent_sdk is not available
+            # Skip this test if kimi_agent_sdk cannot be imported (e.g. the installed
+            # kimi-cli is incompatible with this Python — an env issue, not our code).
             try:
                 import kimi_agent_sdk  # noqa: F401
-            except ImportError:
-                pytest.skip("kimi_agent_sdk not installed")
+            except Exception as e:  # noqa: BLE001 - any import failure means we can't run this
+                pytest.skip(f"kimi_agent_sdk unavailable: {e}")
 
             # Mock the Session.create to return a mock session
             mock_session = AsyncMock()
@@ -315,9 +316,9 @@ class TestBaseToolHelpers:
 
         footer = tool.format_footer()
 
-        assert "Powered by" in footer
-        assert "Kimi" in footer
-        assert "kimi-k2.5" in footer
+        # The standalone footer is just a divider; the "Powered by Kimi" line was
+        # removed in commit fd95f62, so this asserts current behaviour.
+        assert footer == "---"
 
     def test_format_footer_with_extra_info(self, mock_action_config):
         """Test footer with extra information."""
@@ -349,3 +350,176 @@ class TestBaseToolHelpers:
             api_key = tool.setup_agent_env()
 
             assert api_key is None
+
+
+class TestBaseToolReliability:
+    """Cost/outage guardrails in run_agent / run_agent_reliably.
+
+    All tests use fakes for run_agent — they never touch the real Agent SDK.
+    """
+
+    @staticmethod
+    def _immediate_failure_agent(tool, counter):
+        """Fake run_agent that records an error and makes no SDK calls (calls == 0)."""
+        from tools.base import _zero_usage
+
+        async def fake(work_dir, prompt, skills_dir=None, max_steps=100):
+            counter["n"] += 1
+            tool._last_usage = _zero_usage()  # calls == 0 → "immediate failure"
+            tool._last_error = "RuntimeError('moonshot 503')"
+            return ""
+
+        return fake
+
+    @staticmethod
+    def _ran_but_empty_agent(tool, counter):
+        """Fake run_agent that ran (calls > 0) but produced no output, no error."""
+        from tools.base import _zero_usage
+
+        async def fake(work_dir, prompt, skills_dir=None, max_steps=100):
+            counter["n"] += 1
+            usage = _zero_usage()
+            usage["calls"] = 2
+            usage["output"] = 5
+            tool._last_usage = usage
+            tool._last_error = ""
+            return ""
+
+        return fake
+
+    def test_error_captured_into_stage_row(self, mock_action_config):
+        """A captured run_agent error is surfaced on the recorded stage row."""
+        github = MockGitHubClient()
+        tool = ConcreteTool.create(github)
+        counter = {"n": 0}
+        tool.run_agent = self._immediate_failure_agent(tool, counter)
+
+        with patch("tools.base.RETRY_BACKOFF", [0, 0, 0, 0]):
+            result = asyncio.run(
+                tool.run_agent_reliably("/tmp/test", "prompt", label="planner")
+            )
+
+        assert result == ""
+        assert len(tool.stage_metrics) == 1
+        row = tool.stage_metrics[-1]
+        assert row["stage"] == "planner"
+        assert row["error"] == "RuntimeError('moonshot 503')"
+
+    def test_immediate_failure_aborts_after_two_attempts(self, mock_action_config):
+        """An immediate failure (calls == 0 + error) stops after <= 2 attempts."""
+        github = MockGitHubClient()
+        tool = ConcreteTool.create(github)
+        counter = {"n": 0}
+        tool.run_agent = self._immediate_failure_agent(tool, counter)
+
+        with patch("tools.base.RETRY_BACKOFF", [0, 0, 0, 0]):
+            result = asyncio.run(
+                tool.run_agent_reliably("/tmp/test", "prompt", label="planner")
+            )
+
+        assert result == ""
+        assert counter["n"] == 2  # not the full 5 attempts
+        assert tool.stage_metrics[-1]["attempts"] == 2
+
+    def test_full_retry_when_calls_made(self, mock_action_config):
+        """A 'ran but empty' stage (calls > 0) keeps the full retry budget."""
+        github = MockGitHubClient()
+        tool = ConcreteTool.create(github)
+        counter = {"n": 0}
+        tool.run_agent = self._ran_but_empty_agent(tool, counter)
+
+        with patch("tools.base.RETRY_BACKOFF", [0, 0, 0, 0]):
+            result = asyncio.run(
+                tool.run_agent_reliably("/tmp/test", "prompt", label="qa")
+            )
+
+        assert result == ""
+        assert counter["n"] == 5  # len(RETRY_BACKOFF) + 1 — full budget used
+        row = tool.stage_metrics[-1]
+        assert row["attempts"] == 5
+        assert "error" not in row  # no error captured on the empty-output path
+
+    def test_timeout_caps_attempts(self, mock_action_config):
+        """A timing-out stage is retried at most once more (not the full budget)."""
+        from tools.base import _zero_usage
+
+        github = MockGitHubClient()
+        tool = ConcreteTool.create(github)
+        counter = {"n": 0}
+
+        async def slow_agent(work_dir, prompt, skills_dir=None, max_steps=100):
+            counter["n"] += 1
+            usage = _zero_usage()
+            usage["calls"] = 1  # a step ran before the timeout
+            tool._last_usage = usage
+            tool._last_error = ""
+            await asyncio.sleep(5)  # longer than the (patched) timeout
+            return "never reached"
+
+        tool.run_agent = slow_agent
+
+        with patch("tools.base.RETRY_BACKOFF", [0, 0, 0, 0]), patch(
+            "tools.base.AGENT_TIMEOUT_SECONDS", 0.05
+        ):
+            result = asyncio.run(
+                tool.run_agent_reliably("/tmp/test", "prompt", label="executor")
+            )
+
+        assert result == ""
+        assert counter["n"] == 2  # original timeout + 1 retry
+
+    def test_max_steps_threaded_default(self, mock_action_config):
+        """run_agent_reliably forwards the default step cap (100) to run_agent."""
+        from tools.base import _zero_usage
+
+        github = MockGitHubClient()
+        tool = ConcreteTool.create(github)
+        seen = {}
+
+        async def fake(work_dir, prompt, skills_dir=None, max_steps=100):
+            seen["max_steps"] = max_steps
+            tool._last_usage = _zero_usage()
+            tool._last_error = ""
+            return "done"
+
+        tool.run_agent = fake
+        result = asyncio.run(tool.run_agent_reliably("/tmp/test", "prompt"))
+
+        assert result == "done"
+        assert seen["max_steps"] == 100
+
+    def test_max_steps_threaded_explicit(self, mock_action_config):
+        """A caller-supplied max_steps is threaded through to run_agent."""
+        from tools.base import _zero_usage
+
+        github = MockGitHubClient()
+        tool = ConcreteTool.create(github)
+        seen = {}
+
+        async def fake(work_dir, prompt, skills_dir=None, max_steps=100):
+            seen["max_steps"] = max_steps
+            tool._last_usage = _zero_usage()
+            tool._last_error = ""
+            return "done"
+
+        tool.run_agent = fake
+        result = asyncio.run(
+            tool.run_agent_reliably("/tmp/test", "prompt", max_steps=250)
+        )
+
+        assert result == "done"
+        assert seen["max_steps"] == 250
+
+    def test_run_agent_import_error_captures_error(self, mock_action_config):
+        """run_agent records the underlying error on the ImportError early-return."""
+        github = MockGitHubClient()
+        tool = ConcreteTool.create(github)
+
+        with patch.dict(os.environ, {"KIMI_API_KEY": "test-key"}):
+            with patch(
+                "builtins.__import__", side_effect=ImportError("Module not found")
+            ):
+                result = asyncio.run(tool.run_agent("/tmp/test", "Test prompt"))
+
+        assert result == ""
+        assert "Module not found" in tool._last_error

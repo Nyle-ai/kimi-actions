@@ -73,6 +73,23 @@ class TestGitHubClientPR:
 
         mock_pr.create_issue_comment.assert_called_once_with("Test comment")
 
+    def test_post_comment_redacts_secret(self, mock_github_api, monkeypatch):
+        """PR comments redact exact action secret values."""
+        from github_client import GitHubClient
+
+        monkeypatch.setenv("GITHUB_TOKEN", "github_secret_value")
+        mock_github, mock_repo = mock_github_api
+        mock_pr = Mock()
+        mock_pr.create_issue_comment = Mock()
+        mock_repo.get_pull = Mock(return_value=mock_pr)
+
+        client = GitHubClient("fake-token")
+        client.post_comment("owner/repo", 123, "leaked github_secret_value")
+
+        posted = mock_pr.create_issue_comment.call_args[0][0]
+        assert "github_secret_value" not in posted
+        assert "[REDACTED:GITHUB_TOKEN]" in posted
+
     def test_create_review_with_comments(self, mock_github_api):
         """Test creating a review with comments."""
         from github_client import GitHubClient
@@ -100,6 +117,38 @@ class TestGitHubClientPR:
 
         # Should call create_review
         assert mock_pr.create_review.called
+
+    def test_create_review_with_comments_redacts_secret(
+        self, mock_github_api, monkeypatch
+    ):
+        """Review body and inline comments are redacted before posting."""
+        from github_client import GitHubClient
+
+        monkeypatch.setenv("KIMI_API_KEY", "kimi_secret_value")
+        mock_github, mock_repo = mock_github_api
+        mock_pr = Mock()
+        mock_commit = Mock()
+        mock_pr.get_commits = Mock(return_value=Mock(reversed=[mock_commit]))
+        mock_pr.create_review = Mock()
+
+        mock_file = Mock()
+        mock_file.filename = "test.py"
+        mock_file.patch = "@@ -1,3 +1,4 @@\n+new line\n old line"
+        mock_pr.get_files = Mock(return_value=[mock_file])
+        mock_repo.get_pull = Mock(return_value=mock_pr)
+
+        client = GitHubClient("fake-token")
+        client.create_review_with_comments(
+            "owner/repo",
+            123,
+            [{"path": "test.py", "line": 1, "body": "kimi_secret_value"}],
+            body="review kimi_secret_value",
+            event="COMMENT",
+        )
+
+        kwargs = mock_pr.create_review.call_args.kwargs
+        assert "kimi_secret_value" not in kwargs["body"]
+        assert "kimi_secret_value" not in kwargs["comments"][0]["body"]
 
     def test_delete_issue_comments_with_marker(self, mock_github_api):
         """Deletes only comments carrying the marker — never the review summary."""
@@ -162,6 +211,23 @@ class TestGitHubClientIssue:
         client.post_issue_comment("owner/repo", 456, "Issue comment")
 
         mock_issue.create_comment.assert_called_once_with("Issue comment")
+
+    def test_post_issue_comment_redacts_secret(self, mock_github_api, monkeypatch):
+        """Issue comments redact exact action secret values."""
+        from github_client import GitHubClient
+
+        monkeypatch.setenv("LINEAR_API_KEY", "linear_secret_value")
+        mock_github, mock_repo = mock_github_api
+        mock_issue = Mock()
+        mock_issue.create_comment = Mock()
+        mock_repo.get_issue = Mock(return_value=mock_issue)
+
+        client = GitHubClient("fake-token")
+        client.post_issue_comment("owner/repo", 456, "linear_secret_value")
+
+        posted = mock_issue.create_comment.call_args[0][0]
+        assert "linear_secret_value" not in posted
+        assert "[REDACTED:LINEAR_API_KEY]" in posted
 
     def test_add_issue_labels(self, mock_github_api):
         """Test adding labels to an issue."""
@@ -228,6 +294,25 @@ class TestGitHubClientRepo:
         client.reply_to_review_comment("owner/repo", 123, 456, "Reply text")
 
         mock_pr.create_review_comment_reply.assert_called_once_with(456, "Reply text")
+
+    def test_reply_to_review_comment_redacts_secret(
+        self, mock_github_api, monkeypatch
+    ):
+        """Inline replies redact exact action secret values."""
+        from github_client import GitHubClient
+
+        monkeypatch.setenv("CLICKUP_TOKEN", "clickup_secret_value")
+        mock_github, mock_repo = mock_github_api
+        mock_pr = Mock()
+        mock_pr.create_review_comment_reply = Mock()
+        mock_repo.get_pull = Mock(return_value=mock_pr)
+
+        client = GitHubClient("fake-token")
+        client.reply_to_review_comment("owner/repo", 123, 456, "clickup_secret_value")
+
+        posted = mock_pr.create_review_comment_reply.call_args[0][1]
+        assert "clickup_secret_value" not in posted
+        assert "[REDACTED:CLICKUP_TOKEN]" in posted
 
 
 class TestGitHubClientError:
@@ -328,6 +413,29 @@ class TestGitHubClientCommits:
 
 class TestGitHubClientReviewThreads:
     """Tests for the GraphQL review-thread helpers."""
+
+    def test_get_latest_bot_review_state(self, mock_github_api):
+        from github_client import GitHubClient
+
+        mock_github, mock_repo = mock_github_api
+        mock_pr = Mock()
+        human = Mock()
+        human.user.login = "human"
+        human.state = "APPROVED"
+        old_bot = Mock()
+        old_bot.user.login = "github-actions[bot]"
+        old_bot.state = "COMMENTED"
+        latest_bot = Mock()
+        latest_bot.user.login = "github-actions[bot]"
+        latest_bot.state = "CHANGES_REQUESTED"
+        mock_pr.get_reviews = Mock(return_value=[human, old_bot, latest_bot])
+        mock_repo.get_pull = Mock(return_value=mock_pr)
+
+        client = GitHubClient("fake-token")
+        assert (
+            client.get_latest_bot_review_state("owner/repo", 123)
+            == "CHANGES_REQUESTED"
+        )
 
     def test_get_bot_review_threads_filters_by_login(self, mock_github_api):
         from github_client import GitHubClient

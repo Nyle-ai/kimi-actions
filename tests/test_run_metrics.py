@@ -122,6 +122,17 @@ def test_snapshot_handoffs(tmp_path):
     assert not (dest / "missing.json").exists()
 
 
+def test_snapshot_handoffs_redacts_secrets(tmp_path, monkeypatch):
+    monkeypatch.setenv("KIMI_API_KEY", "secret_value_12345")
+    work = tmp_path / "work"
+    work.mkdir()
+    (work / "review-plan.json").write_text('{"body": "secret_value_12345"}')
+    dest = tmp_path / "out"
+    dest.mkdir()
+    run_metrics.snapshot_handoffs(str(work), str(dest), ["review-plan.json"])
+    assert "secret_value_12345" not in (dest / "review-plan.json").read_text()
+
+
 def test_emit_writes_summary_and_metadata(tmp_path, monkeypatch):
     summary_file = tmp_path / "step_summary.md"
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
@@ -141,3 +152,21 @@ def test_emit_writes_summary_and_metadata(tmp_path, monkeypatch):
     written = json.loads((dest / "run-metadata.json").read_text())
     assert written["model"] == "kimi-k2.7-code"
     assert "spend by stage" in summary_file.read_text()
+
+
+def test_emit_includes_review_model_and_project_rules(tmp_path, monkeypatch):
+    dest = tmp_path / "metrics"
+    dest.mkdir()
+    monkeypatch.setenv("GITHUB_TOKEN", "github_secret_value")
+
+    meta = run_metrics.emit(
+        repo="Nyle-ai/x", pr_number=7, sha="abc123", model="kimi-k2.7-code",
+        stage_metrics=[], verdict="comment", num_issues=1, dest_dir=str(dest),
+        review_model={"reviewed_files": ["src/api.py"], "note": "github_secret_value"},
+        project_rules=[{"path": "CLAUDE.md", "reason": "top_level_guidance"}],
+    )
+
+    assert meta["review_model"]["reviewed_files"] == ["src/api.py"]
+    written = json.loads((dest / "run-metadata.json").read_text())
+    assert written["project_rules"][0]["path"] == "CLAUDE.md"
+    assert "github_secret_value" not in (dest / "run-metadata.json").read_text()

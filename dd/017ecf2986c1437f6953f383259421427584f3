@@ -1,0 +1,127 @@
+README.md
+  s_d983f1f75259ec::t_a65cd8ad05b146 91
+  s_d983f1f75259ec::t_678b71d7096427 72-73,77,89-90,92,220-222
+src/tools/reviewer.py
+  s_637385c9e7978b::t_fc41593dd3ab45 589-591,595,599-600
+  s_637385c9e7978b::t_5568ecb038fbdc 39-43
+  s_637385c9e7978b::t_8960e5dc74acaa 50-55
+  s_637385c9e7978b::t_faab4464b65d8a 208-210,212-236
+  s_637385c9e7978b::t_8d0fca45512375 779-787
+  s_d983f1f75259ec::t_c3bc212d745296 186,403-406,646-649,699,704-710
+  s_d983f1f75259ec::t_ce99bdf11eed68 853-856,859-865,890-894
+  s_d983f1f75259ec::t_748c96b50bbffa 198-199,205
+  s_637385c9e7978b::t_34b240aba6d959 531-550
+  s_637385c9e7978b::t_3d268927b9ca11 56-83
+  s_637385c9e7978b::t_beb9a6b7446db5 596-598,601-610,612,614-619,622-623,630,632-634,639-644
+  s_d983f1f75259ec::t_a3dacbb98c9415 282-377,395-402,407-412
+  s_d983f1f75259ec::t_2b7a1762455335 16,19,37-38,44-48
+  s_d983f1f75259ec::t_ca8d1c3552a9db 449-450,461-462,476,489,499
+  s_637385c9e7978b::t_4ec6738609b123 629,631
+  s_637385c9e7978b::t_fe786e5f48d6e8 85-98
+  s_637385c9e7978b::t_74acd450fcb315 611,613
+  s_d983f1f75259ec::t_7fc79aac97d97c 121-122,125,136,142,151-152,166,179-183,187
+  s_d983f1f75259ec::t_e41a371f2b9406 512,518,520-530,551-588,592-594,620-621,624-628,635-638,645,650-669
+  s_d983f1f75259ec::t_fead4c4475804d 700-701,792-811
+  s_637385c9e7978b::t_de222fe561c4c0 378-394
+  s_d983f1f75259ec::t_959010159faec8 895
+  s_d983f1f75259ec::t_9320adadf8dafb 693-697,712,716,777-778,788-791
+tests/test_sanitize.py
+  s_d983f1f75259ec::t_d9d0858bc5a675 12-18,58-74,80-89
+  s_637385c9e7978b::t_bd0b23da51bf1a 75-79
+  s_a17f61f21cc763::t_0920b5576926c1 90-124,128-131,135-137,141-143,145,147-148,150-179
+  s_637385c9e7978b::t_5393c10e10e226 125-127
+  s_637385c9e7978b::t_909f3b906b4832 132-134,138-140,144,146,149
+  s_a17f61f21cc763::t_acf99e35e46812 3,7
+src/sanitize.py
+  s_a17f61f21cc763::t_9dd3b3407370ee 89-104
+  s_a17f61f21cc763::t_74cfb58efc5af6 44-65
+  s_d983f1f75259ec::t_799cac45c63dc4 1,13-14,28-43,66-88,105-112,138-180
+tests/test_diff_filter.py
+  s_d983f1f75259ec::t_536a1fb35e619b 9,13,15,58-106
+tests/test_github_client.py
+  s_d983f1f75259ec::t_e4462aff4330fe 76-92,121-152,215-231,298-315
+  s_d983f1f75259ec::t_3706d5fb735668 417-439
+src/skills/code-review/PLANNER.md
+  s_d983f1f75259ec::t_67a277eae254b5 10-13
+src/skills/code-review/QA.md
+  s_d983f1f75259ec::t_a906111cdebc98 36-37
+src/diff_filter.py
+  s_d983f1f75259ec::t_e357418af4a4b2 1,17-20,60-126,139-199,212-218,223-225,243,248-249,251-254,256-279,281-294,296-298,300-321
+  s_d983f1f75259ec::t_e2b84409e61c89 200-211,219-222
+  s_d983f1f75259ec::t_1637a709b1c204 280
+src/skills/code-review/EXECUTOR.md
+  s_d983f1f75259ec::t_4b32f2a9184ccb 44-45
+tests/test_run_metrics.py
+  s_d983f1f75259ec::t_91d34f70d6c878 125-135,155-172
+tests/test_reviewer.py
+  s_637385c9e7978b::t_193c05d8077ee7 239-241,245-254,256-271,276-283
+  s_637385c9e7978b::t_699a94dc90c522 644-718
+  s_d983f1f75259ec::t_c8e55a98286c2b 565-580,592-643
+  s_d983f1f75259ec::t_cab1797c27ca48 546-548
+  s_d983f1f75259ec::t_7d37cd1350bba4 164-166,168-182,204-205,308,315-317,319-363,491,581-591
+  s_d983f1f75259ec::t_603d5a33d5e49e 28,66-68,163,167,183-203,285-307,309-314,318
+  s_d983f1f75259ec::t_e4723e56ea6833 156,160,238,242-244,255,272-275,284
+  s_d983f1f75259ec::t_71020ac73bb718 433-490,492-495
+  s_637385c9e7978b::t_bb405091a528de 719-749
+src/tools/base.py
+  s_2fd2a1439ae0ea::t_222cd281e0744a 357-360
+  s_637385c9e7978b::t_df15f40bcd88e7 289-290
+  s_2fd2a1439ae0ea::t_4742d50f30759b 33-43
+  s_2fd2a1439ae0ea::t_2317b5104e5f90 377,383-391,396-397,400,404,410,424-448,455
+  s_2fd2a1439ae0ea::t_bdbf4a8036eb21 336
+  s_2fd2a1439ae0ea::t_b18b8c4d329bfa 316
+  s_2fd2a1439ae0ea::t_a271c5af21209c 94-96
+  s_2fd2a1439ae0ea::t_a7649ba92fdb26 266-270,278-279,285,291,297
+tests/test_base_tool.py
+  s_2fd2a1439ae0ea::t_0c0fdd965602da 353-525
+  s_637385c9e7978b::t_bfd5aa90326c9f 319-321
+  s_637385c9e7978b::t_d307a999349094 214-215,218-219
+src/github_client.py
+  s_d983f1f75259ec::t_096ba6925e5d84 527
+  s_d983f1f75259ec::t_89024c415dadc2 366-377
+  s_d983f1f75259ec::t_fe98723ef1220d 15,60,76,99,223,236-239,244
+.kimi-config.example.yml
+  s_d983f1f75259ec::t_b0e7415f615f94 29-36
+src/run_metrics.py
+  s_d983f1f75259ec::t_a4bab5db703b6c 23,199-200,203,215-219,268,276,291-292,313-314
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "dd017ecf2986c1437f6953f383259421427584f3",
+  "prompts": {},
+  "sessions": {
+    "s_2fd2a1439ae0ea": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b353f53a-2391-49e3-b976-26d2e462232e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Artur Kuzmin <artursregs@gmail.com>"
+    },
+    "s_637385c9e7978b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1e4d92fd-f9b2-4505-8ede-e743e8dcc790",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": null
+    },
+    "s_a17f61f21cc763": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6b8b69fc-dddb-489f-8f88-50eaf53c7a7a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Artur Kuzmin <artursregs@gmail.com>"
+    },
+    "s_d983f1f75259ec": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019edded-9945-72c0-bd6b-457f40e7251b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Artur Kuzmin <artursregs@gmail.com>"
+    }
+  }
+}

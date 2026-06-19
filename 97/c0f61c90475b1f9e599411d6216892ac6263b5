@@ -1,0 +1,26 @@
+tests/test_reviewer.py
+  s_637385c9e7978b::t_d584083917224a 753-779,781-803
+  s_637385c9e7978b::t_f7ab3d4f4fea9b 780
+  s_637385c9e7978b::t_79d96460b6a3a7 44-46
+src/github_client.py
+  s_637385c9e7978b::t_2d5cbbd9fe6956 485-499
+src/tools/reviewer.py
+  s_637385c9e7978b::t_a78eeb1bc60d9f 158-168
+  s_637385c9e7978b::t_b2a09223cec35e 935-984
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "97c0f61c90475b1f9e599411d6216892ac6263b5",
+  "prompts": {},
+  "sessions": {
+    "s_637385c9e7978b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1e4d92fd-f9b2-4505-8ede-e743e8dcc790",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Artur Kuzmin <artursregs@gmail.com>"
+    }
+  }
+}

@@ -482,6 +482,21 @@ class GitHubClient:
                 }
         return None
 
+    def last_bot_comment_contains(
+        self, repo_name: str, pr_number: int, needle: str
+    ) -> bool:
+        """True if any recent issue comment already contains ``needle`` (a dedup marker)."""
+        try:
+            pr = self.get_pr(repo_name, pr_number)
+            comments = list(pr.get_issue_comments())
+        except Exception as e:  # noqa: BLE001 - dedup is best-effort
+            logger.warning(f"Could not list comments for dedup check: {e}")
+            return False
+        for comment in reversed(comments):
+            if needle in (comment.body or ""):
+                return True
+        return False
+
     def delete_issue_comments_with_marker(
         self, repo_name: str, pr_number: int, marker: str
     ) -> int:

@@ -155,6 +155,17 @@ class Reviewer(BaseTool):
                 )
             except Exception as e:
                 logger.error(f"Review pipeline failed: {e}")
+                # A model-API failure (quota/auth/outage) gets a clear, deduplicated notice
+                # instead of leaking an internal schema error; dedup only auto-review runs
+                # so an explicit /review always gets a fresh response.
+                notice = self._agent_unavailable_notice(
+                    repo_name,
+                    pr_number,
+                    pr.head.sha,
+                    allow_dedup=not kwargs.get("command_quote"),
+                )
+                if notice is not None:
+                    return notice
                 return self._error_comment(str(e))
 
             # Preserve the per-stage handoff JSONs (trajectory) before the temp dir is cleaned.
@@ -921,3 +932,53 @@ class Reviewer(BaseTool):
 
     def _error_comment(self, message: str) -> str:
         return f"### 🌗 Pull request overview\n\n❌ {message}\n\n{self.format_footer()}"
+
+    def _unavailable_reason(self) -> Optional[str]:
+        """Human-readable reason when the model API call itself failed (quota/auth/outage),
+        as opposed to the agent running but emitting unparseable output. Driven by the error
+        captured in ``BaseTool.run_agent`` (``self._last_error``); returns None when the agent
+        ran (so the caller surfaces a normal error instead)."""
+        err = (getattr(self, "_last_error", "") or "").lower()
+        if not err:
+            return None
+        if any(s in err for s in ("429", "quota", "usage limit", "rate limit", "rate_limit")):
+            return "the Kimi API usage quota is exhausted for this billing cycle"
+        if any(
+            s in err
+            for s in ("401", "403", "unauthorized", "forbidden", "api key", "api_key", "authentication")
+        ):
+            return "the Kimi API rejected the request (check the API key and permissions)"
+        if "timed out" in err or "timeout" in err:
+            return "the review agent timed out"
+        if any(s in err for s in ("connect", "unavailable", "502", "503", "500", "econnreset", "unreachable")):
+            return "the Kimi API is temporarily unavailable"
+        return "the review agent could not reach the model"
+
+    def _agent_unavailable_notice(
+        self,
+        repo_name: str,
+        pr_number: int,
+        head_sha: Optional[str],
+        allow_dedup: bool = True,
+    ) -> Optional[str]:
+        """A clear, de-duplicated 'review unavailable' notice for model-API failures, used
+        instead of leaking an internal schema error. Returns the notice to post, ``""`` to
+        suppress a duplicate for this commit, or None to fall back to a generic error."""
+        reason = self._unavailable_reason()
+        if reason is None:
+            return None
+        marker = f"<!-- kimi-review:unavailable sha={(head_sha or '')[:12]} -->"
+        if allow_dedup:
+            try:
+                if self.github.last_bot_comment_contains(repo_name, pr_number, marker):
+                    logger.info("Unavailable notice already posted for this commit; skipping.")
+                    return ""
+            except Exception as e:  # noqa: BLE001 - dedup is best-effort
+                logger.warning(f"Dedup check for unavailable notice failed: {e}")
+        return (
+            "### 🌗 Pull request overview\n\n"
+            f"⏳ **Review unavailable** — {reason}. No code was reviewed; this is an "
+            "infrastructure issue, **not an approval**. I'll retry automatically on the next "
+            "push, or you can re-run `/review` once it's resolved."
+            f"\n\n{self.format_footer()}\n\n{marker}"
+        )

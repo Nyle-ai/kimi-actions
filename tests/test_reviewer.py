@@ -41,6 +41,9 @@ class MockGitHubClient:
     def get_last_bot_comment(self, repo, pr_number):
         return None
 
+    def last_bot_comment_contains(self, repo, pr_number, needle):
+        return any(needle in (c or "") for c in self.posted_comments)
+
     def post_comment(self, repo, pr_number, body):
         self.posted_comments.append(body)
 
@@ -747,3 +750,54 @@ class TestDiffByteCap:
         assert len(diff) <= MAX_DIFF_TOTAL_BYTES + MAX_PATCH_BYTES_PER_FILE + 200
         block = reviewer._review_model_block(model)
         assert "Diff size limits applied" in block
+
+
+class TestAgentUnavailableNotice:
+    """When the model API itself fails (quota/auth/outage), surface a clear, accurate,
+    de-duplicated notice instead of leaking an internal schema error."""
+
+    def test_quota_error_produces_clear_notice(self, mock_action_config):
+        from tools.reviewer import Reviewer
+
+        reviewer = Reviewer(MockGitHubClient())
+        reviewer._last_error = (
+            "APIStatusError('Error code: 429 - exceeded_current_quota_error: "
+            "You've reached kimi monthly usage limit for this billing cycle')"
+        )
+        notice = reviewer._agent_unavailable_notice("o/r", 1, "abc123def456")
+        assert notice is not None and notice != ""
+        assert "quota is exhausted" in notice
+        assert "not an approval" in notice
+        # Must NOT leak the internal schema wording.
+        assert "invalid JSON" not in notice and "no usable JSON" not in notice
+        assert "kimi-review:unavailable sha=abc123def456" in notice
+
+    def test_auth_and_timeout_reasons(self, mock_action_config):
+        from tools.reviewer import Reviewer
+
+        reviewer = Reviewer(MockGitHubClient())
+        reviewer._last_error = "APIStatusError('Error code: 401 - unauthorized')"
+        assert "API key" in reviewer._agent_unavailable_notice("o/r", 1, "s")
+        reviewer._last_error = "TimeoutError('agent timed out')"
+        assert "timed out" in reviewer._agent_unavailable_notice("o/r", 1, "s")
+
+    def test_no_error_falls_back_to_generic(self, mock_action_config):
+        from tools.reviewer import Reviewer
+
+        reviewer = Reviewer(MockGitHubClient())
+        reviewer._last_error = ""  # agent ran but emitted bad JSON -> not an availability issue
+        assert reviewer._agent_unavailable_notice("o/r", 1, "s") is None
+
+    def test_dedup_suppresses_repeat_for_same_commit(self, mock_action_config):
+        from tools.reviewer import Reviewer
+
+        github = MockGitHubClient()
+        reviewer = Reviewer(github)
+        reviewer._last_error = "Error code: 429 quota"
+        first = reviewer._agent_unavailable_notice("o/r", 1, "sha123", allow_dedup=True)
+        assert first
+        github.posted_comments.append(first)  # simulate it being posted
+        again = reviewer._agent_unavailable_notice("o/r", 1, "sha123", allow_dedup=True)
+        assert again == ""  # suppressed
+        # An explicit /review (allow_dedup=False) still gets a fresh notice.
+        assert reviewer._agent_unavailable_notice("o/r", 1, "sha123", allow_dedup=False)

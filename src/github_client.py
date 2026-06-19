@@ -12,6 +12,7 @@ from github import Github, GithubException
 from github.PullRequest import PullRequest
 from github.Issue import Issue
 from github.Commit import Commit
+from sanitize import redact_secrets
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ class GitHubClient:
         """Post a comment on the PR."""
         try:
             pr = self.get_pr(repo_name, pr_number)
-            pr.create_issue_comment(body)
+            pr.create_issue_comment(redact_secrets(body))
             logger.info(f"Posted comment to PR #{pr_number}")
         except GithubException as e:
             logger.error(f"Failed to post comment to PR #{pr_number}: {e}")
@@ -72,7 +73,7 @@ class GitHubClient:
         """
         try:
             pr = self.get_pr(repo_name, pr_number)
-            pr.create_review(body=body, event=event)
+            pr.create_review(body=redact_secrets(body), event=event)
             logger.info(f"Posted review to PR #{pr_number} with event {event}")
         except GithubException as e:
             logger.error(f"Failed to post review to PR #{pr_number}: {e}")
@@ -95,7 +96,7 @@ class GitHubClient:
         """Reply to a review comment (inline comment)."""
         try:
             pr = self.get_pr(repo_name, pr_number)
-            pr.create_review_comment_reply(comment_id, body)
+            pr.create_review_comment_reply(comment_id, redact_secrets(body))
             logger.info(f"Replied to review comment {comment_id}")
         except GithubException as e:
             logger.error(f"Failed to reply to review comment: {e}")
@@ -219,7 +220,7 @@ class GitHubClient:
                     comment_data: Dict[str, Any] = {
                         "path": path,
                         "line": line,
-                        "body": c.get("body", ""),
+                        "body": redact_secrets(c.get("body", "")),
                         "side": side,
                     }
                     # Add start_line for multi-line suggestions
@@ -232,12 +233,15 @@ class GitHubClient:
 
             if valid_comments:
                 pr.create_review(
-                    commit=commit, body=body, event=event, comments=valid_comments
+                    commit=commit,
+                    body=redact_secrets(body),
+                    event=event,
+                    comments=valid_comments,
                 )
                 logger.info(f"Posted review with {len(valid_comments)} inline comments")
             elif body:
                 # No valid inline comments, just post body
-                pr.create_review(body=body, event=event)
+                pr.create_review(body=redact_secrets(body), event=event)
                 logger.info("Posted review without inline comments")
 
         except GithubException as e:
@@ -358,6 +362,18 @@ class GitHubClient:
                 }
             )
         return threads
+
+    def get_latest_bot_review_state(
+        self, repo_name: str, pr_number: int, bot_login: Optional[str] = None
+    ) -> Optional[str]:
+        """Return the latest review state authored by this bot, if any."""
+        bot = bot_login or os.environ.get("KIMI_BOT_LOGIN", "github-actions[bot]")
+        pr = self.get_pr(repo_name, pr_number)
+        latest = None
+        for review in pr.get_reviews():
+            if getattr(getattr(review, "user", None), "login", None) == bot:
+                latest = str(getattr(review, "state", "") or "").upper()
+        return latest or None
 
     def resolve_review_thread(self, thread_id: str) -> bool:
         """Resolve a review thread by node id. Returns True on success."""
@@ -508,7 +524,7 @@ class GitHubClient:
         """Post a comment on an issue."""
         try:
             issue = self.get_issue(repo_name, issue_number)
-            issue.create_comment(body)
+            issue.create_comment(redact_secrets(body))
             logger.info(f"Posted comment to Issue #{issue_number}")
         except GithubException as e:
             logger.error(f"Failed to post comment to Issue #{issue_number}: {e}")

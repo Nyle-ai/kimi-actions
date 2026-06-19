@@ -69,11 +69,12 @@
 sessions that hand off via JSON files on disk:
 
 ```
-filter + sanitize diff → clone
+build prioritized coverage model + sanitize diff → clone
+  → load matching project rules
   → Planner   → review-plan.json           (candidate issues)
   → Executor  → review-draft.json          (verified + suggestion fixes)
   → QA        → qa-validated-review.json    (false-positives/noise removed)
-  → POSTER (pure Python): inline comments + verdict summary + auto-resolve fixed threads
+  → POSTER (pure Python): deterministic verdict + inline comments + auto-resolve fixed threads
 ```
 
 Each stage has a timeout, heartbeat and retry/backoff; an empty Planner result short-circuits to
@@ -85,7 +86,10 @@ an approval.
 - 💬 `/ask` - Interactive Q&A about the PR or specific code
 - 💡 **Inline suggestions** - Findings posted on the exact line with one-click `suggestion` fixes
 - ♻️ **Auto-resolve** - Threads for fixed issues resolve themselves on the next review
-- 🧹 **Diff filtering** - Lockfiles, minified bundles and generated assets are dropped (migrations kept)
+- 🧹 **Prioritized coverage** - Lockfiles/generated assets are dropped, migrations are always kept, and API/security/DB/queue/financial files are prioritized when `max_files` is hit
+- 📜 **Project rules** - Top-level guidance plus matching `.claude/rules/*.md` files are loaded deterministically into the review prompt
+- 🚦 **Deterministic verdicts** - Critical/high findings submit `REQUEST_CHANGES`; clean or lower-severity outcomes clear prior bot blocks without letting model output choose the event
+- 🔐 **Secret redaction** - Known action secrets and high-confidence token patterns are redacted before GitHub posting and trajectory artifacts
 - 🛡️ **Prompt-injection defense** - Untrusted PR content is sanitized and fenced before it reaches the model
 - 🧠 **Agent Skills** - Modular capability extension with custom review rules
 - ⚙️ Configurable review strictness and category toggles
@@ -213,7 +217,9 @@ Use these commands in PR comments:
 
 ## Observability (spend & trajectory)
 
-Every `/review` records **per-stage spend** (Planner / Executor / QA) and emits it three ways:
+Every `/review` records **per-stage spend** (Planner / Executor / QA), the deterministic coverage
+model, and the project rules loaded for the run. Secrets are redacted before artifacts are written.
+It emits this data three ways:
 
 - A **Step Summary** table on the Actions run page — tokens in/out, cache hits, calls, wall-time.
 - A **`run-metadata.json`** trajectory record + the per-stage handoff JSONs, written to

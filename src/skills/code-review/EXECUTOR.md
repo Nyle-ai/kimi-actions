@@ -41,6 +41,7 @@ that does not hold up, and turn the survivors into concrete, reviewer-ready comm
 }
 ```
 
-- `confidence` ∈ `high | medium | low`. `verdict` ∈ `approve | comment`.
+- `confidence` ∈ `high | medium | low`. `verdict` ∈ `approve | comment | request_changes`.
+- The orchestrator recomputes the final verdict from severity; do not downgrade high/critical findings.
 - Drop low-value or unverifiable candidates rather than padding the list.
 - Output the JSON file only — no extra prose.

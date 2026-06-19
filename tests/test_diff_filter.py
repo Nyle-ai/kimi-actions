@@ -6,12 +6,13 @@ import sys
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from diff_filter import should_include, filter_files  # noqa: E402
+from diff_filter import should_include, filter_files, build_review_model  # noqa: E402
 
 
 class _File:
-    def __init__(self, filename):
+    def __init__(self, filename, patch="@@ -1 +1 @@\n+a"):
         self.filename = filename
+        self.patch = patch
 
 
 class TestShouldInclude:
@@ -54,3 +55,52 @@ class TestFilterFiles:
         files = [_File(f"f{i}.py") for i in range(10)]
         kept = filter_files(files, max_files=3)
         assert len(kept) == 3
+
+    def test_prioritized_cap_keeps_high_risk_late_file(self):
+        files = [
+            _File("docs/guide.md"),
+            _File("src/widget.tsx"),
+            _File("src/app/api/users/route.ts"),
+        ]
+        kept, model = build_review_model(files, max_files=2)
+        names = [f.filename for f in kept]
+        assert "src/app/api/users/route.ts" in names
+        assert "docs/guide.md" not in names
+        skipped = {f["filename"]: f["reason"] for f in model["unreviewed_files"]}
+        assert skipped["docs/guide.md"] == "max_files_cap"
+
+    def test_always_keep_survives_cap(self):
+        files = [
+            _File("docs/guide.md"),
+            _File("src/a.py"),
+            _File("supabase/migrations/001_init.sql"),
+        ]
+        kept, model = build_review_model(files, max_files=1)
+        names = [f.filename for f in kept]
+        assert names == ["supabase/migrations/001_init.sql"]
+        assert model["reviewed_count"] == 1
+
+    def test_always_keep_can_exceed_cap(self):
+        files = [
+            _File("supabase/migrations/001_init.sql"),
+            _File("db/migrations/002_next.sql"),
+            _File("docs/guide.md"),
+        ]
+        kept, model = build_review_model(files, max_files=1)
+        names = [f.filename for f in kept]
+        assert names == [
+            "supabase/migrations/001_init.sql",
+            "db/migrations/002_next.sql",
+        ]
+        assert model["reviewed_count"] == 2
+
+    def test_review_model_records_filter_reasons_and_risk_tags(self):
+        files = [
+            _File("yarn.lock"),
+            _File("src/worker/enqueueJob.ts", patch="+ await enqueue(job)"),
+        ]
+        kept, model = build_review_model(files, max_files=10)
+        assert [f.filename for f in kept] == ["src/worker/enqueueJob.ts"]
+        records = {f["filename"]: f for f in model["files"]}
+        assert records["yarn.lock"]["reason"] == "always_strip"
+        assert "queue" in records["src/worker/enqueueJob.ts"]["risk_tags"]

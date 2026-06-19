@@ -33,6 +33,7 @@ noise**: keep only findings that are clearly correct and worth a developer's tim
 }
 ```
 
-- `verdict` ∈ `approve | comment`. Use `approve` when no blocking issues remain.
+- `verdict` ∈ `approve | comment | request_changes`. Use `approve` when no blocking issues remain.
+- The orchestrator recomputes the final verdict from severity; do not downgrade high/critical findings.
 - Keep `summary` concise; it becomes the posted overview.
 - Output the JSON file only — no extra prose.

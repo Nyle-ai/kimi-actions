@@ -20,6 +20,7 @@ import json
 import logging
 import os
 from typing import Any, Dict, List, Optional
+from sanitize import redact_obj, redact_secrets
 
 logger = logging.getLogger(__name__)
 
@@ -195,9 +196,11 @@ def build_metadata(
     num_issues: int,
     shadow_usd: Optional[float],
     quota: Optional[float],
+    review_model: Optional[Dict[str, Any]] = None,
+    project_rules: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """The persisted trajectory record (run-metadata.json)."""
-    return {
+    metadata = {
         "repo": repo,
         "pr": pr_number,
         "sha": sha,
@@ -209,6 +212,11 @@ def build_metadata(
         "shadow_cost_usd": shadow_usd,
         "quota_pct": quota,
     }
+    if review_model is not None:
+        metadata["review_model"] = review_model
+    if project_rules is not None:
+        metadata["project_rules"] = project_rules
+    return metadata
 
 
 def write_step_summary(markdown: str) -> None:
@@ -257,7 +265,7 @@ def snapshot_handoffs(work_dir: str, dest_dir: str, files: List[str]) -> None:
             with open(src, "r", encoding="utf-8") as fr, open(
                 os.path.join(dest_dir, name), "w", encoding="utf-8"
             ) as fw:
-                fw.write(fr.read())
+                fw.write(redact_secrets(fr.read()))
         except OSError as e:
             logger.warning(f"Could not snapshot {name}: {e}")
 
@@ -265,7 +273,7 @@ def snapshot_handoffs(work_dir: str, dest_dir: str, files: List[str]) -> None:
 def write_metadata(metadata: Dict[str, Any], dest_dir: str) -> None:
     try:
         with open(os.path.join(dest_dir, "run-metadata.json"), "w", encoding="utf-8") as f:
-            json.dump(metadata, f, indent=2)
+            json.dump(redact_obj(metadata), f, indent=2)
     except OSError as e:
         logger.warning(f"Could not write run-metadata.json: {e}")
 
@@ -280,6 +288,8 @@ def emit(
     verdict: str,
     num_issues: int,
     dest_dir: Optional[str] = None,
+    review_model: Optional[Dict[str, Any]] = None,
+    project_rules: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """Build + persist the run summary. Returns the metadata dict (also for tests)."""
     totals = summarize(stage_metrics)
@@ -300,6 +310,8 @@ def emit(
         num_issues=num_issues,
         shadow_usd=shadow,
         quota=quota,
+        review_model=review_model,
+        project_rules=project_rules,
     )
     write_metadata(metadata, dest_dir or metrics_dir())
 

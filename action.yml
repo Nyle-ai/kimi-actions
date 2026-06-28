@@ -7,12 +7,12 @@ branding:
 
 inputs:
   kimi_api_key:
-    description: 'Kimi API Key from Moonshot AI'
+    description: 'API key — either a LiteLLM virtual key or a direct Kimi/Moonshot API key'
     required: true
   kimi_base_url:
-    description: 'Kimi API Base URL (optional, defaults to https://api.moonshot.ai/v1). Subscription users set https://api.kimi.com/coding/v1'
+    description: 'Base URL for the LLM endpoint (defaults to LiteLLM proxy). Override with https://api.moonshot.ai/v1 or https://api.kimi.com/coding/v1 for direct Moonshot access.'
     required: false
-    default: 'https://api.moonshot.ai/v1'
+    default: 'https://litellm.gettalentagent.com/v1'
   github_token:
     description: 'GitHub Token for PR operations'
     required: true
@@ -21,9 +21,9 @@ inputs:
     required: false
     default: 'en-US'
   model:
-    description: 'Kimi model to use (defaults to kimi-k2.7-code). Subscription users set kimi-for-coding'
+    description: 'Model name as configured in LiteLLM (or a direct Moonshot model ID like kimi-k2.7-code)'
     required: false
-    default: 'kimi-k2.7-code'
+    default: 'kimi-code'
   review_level:
     description: 'Review strictness (strict, normal, gentle)'
     required: false

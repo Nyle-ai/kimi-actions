@@ -41,3 +41,6 @@ test
 
 # Kimi review run artifacts (per-run spend metrics / trajectory)
 .kimi-review/
+
+# Local-only smoke test (contains a live API key — do not commit)
+test_litellm_local.py

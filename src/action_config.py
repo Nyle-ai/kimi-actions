@@ -14,10 +14,9 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Dict
 
 # Single source of truth for model / endpoint defaults.
-# Compliant pay-go defaults; repos using the Kimi Code subscription override these
-# via the kimi_base_url / model inputs (e.g. https://api.kimi.com/coding/v1 + kimi-for-coding).
-DEFAULT_MODEL = "kimi-k2.7-code"
-DEFAULT_BASE_URL = "https://api.moonshot.ai/v1"
+# Routed through LiteLLM proxy; override via kimi_base_url / model inputs if needed.
+DEFAULT_MODEL = "kimi-code"
+DEFAULT_BASE_URL = "https://litellm.gettalentagent.com/v1"
 
 
 @dataclass
@@ -117,7 +116,11 @@ class ActionConfig:
 
         # API keys (from GitHub Actions inputs)
         config.kimi_api_key = os.environ.get("INPUT_KIMI_API_KEY", "")
-        config.kimi_base_url = os.environ.get("INPUT_KIMI_BASE_URL", DEFAULT_BASE_URL)
+        config.kimi_base_url = (
+            os.environ.get("INPUT_KIMI_BASE_URL")
+            or os.environ.get("KIMI_BASE_URL")
+            or DEFAULT_BASE_URL
+        )
         config.github_token = os.environ.get("INPUT_GITHUB_TOKEN", "")
 
         # General settings
